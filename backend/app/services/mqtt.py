@@ -219,6 +219,7 @@ class MQTTService:
                     "lane_id": str(payload.lane_id),
                     "status": payload.status,
                     "message": payload.message,
+                    "device_id": str(payload.device_id) if payload.device_id else None,
                 },
             )
         )

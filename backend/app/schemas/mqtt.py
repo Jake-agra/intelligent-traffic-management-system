@@ -60,4 +60,5 @@ class SignalCommandAckPayload(MQTTBaseModel):
     lane_id: uuid.UUID
     status: str
     message: str | None = None
+    device_id: uuid.UUID | None = None
     acknowledged_at: datetime

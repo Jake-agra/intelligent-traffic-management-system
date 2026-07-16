@@ -1,7 +1,8 @@
 # MQTT Contract
 
 Phase 7 defines the initial MQTT foundation between the backend and future
-Raspberry Pi controllers. GPIO control is not included in this phase.
+Raspberry Pi controllers. Phase 8 adds the matching Raspberry Pi edge-service
+foundation. GPIO control is not included in either phase.
 
 ## Configuration
 
@@ -18,6 +19,23 @@ Required settings when MQTT is enabled:
 - `MQTT_CLIENT_ID`
 - `MQTT_KEEPALIVE_SECONDS`
 - `MQTT_MAX_TELEMETRY_AGE_SECONDS`
+
+Raspberry Pi edge-service settings:
+
+- `DEVICE_ID`
+- `INTERSECTION_ID`
+- `SOFTWARE_VERSION`
+- `MQTT_ENABLED`
+- `MQTT_BROKER_HOST`
+- `MQTT_BROKER_PORT`
+- `MQTT_USERNAME`
+- `MQTT_PASSWORD`
+- `MQTT_TLS_ENABLED`
+- `MQTT_CLIENT_ID`
+- `MQTT_KEEPALIVE_SECONDS`
+- `HEARTBEAT_INTERVAL_SECONDS`
+- `TELEMETRY_INTERVAL_SECONDS`
+- `COMMAND_MAX_AGE_SECONDS`
 
 ## Topics
 
@@ -104,6 +122,7 @@ from API route handlers.
   "lane_id": "uuid",
   "status": "accepted",
   "message": "Command queued",
+  "device_id": "uuid",
   "acknowledged_at": "timezone-aware ISO timestamp"
 }
 ```

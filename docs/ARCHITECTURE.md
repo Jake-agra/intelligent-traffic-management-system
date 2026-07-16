@@ -52,6 +52,15 @@ Signal command publication is exposed as an internal backend service. API route
 handlers do not publish MQTT messages directly, which keeps later MQTT broker
 or Redis Pub/Sub replacement isolated from HTTP code.
 
+## Raspberry Pi edge-service foundation
+
+Phase 8 adds `raspberry-pi/` as the first hardware-free edge service. It loads
+device and intersection identity from environment configuration, publishes
+heartbeat and telemetry messages to MQTT, subscribes to backend signal commands
+and publishes command acknowledgements. GPIO, camera and computer-vision
+execution remain out of scope for this phase so the service can run on a
+developer machine or Raspberry Pi without hardware-specific imports.
+
 ## Document traceability
 
 | Documented requirement | Implementation area |
