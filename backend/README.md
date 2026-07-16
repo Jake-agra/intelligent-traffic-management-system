@@ -1,6 +1,6 @@
 # Backend
 
-Minimal Phase 1 backend foundation for the Intelligent Traffic Management System.
+Minimal backend foundation for the Intelligent Traffic Management System.
 
 ## Stack
 
@@ -32,6 +32,18 @@ uvicorn app.main:app --reload
 
 ```powershell
 pytest
+```
+
+## Migrations
+
+```powershell
+alembic upgrade head
+```
+
+Create new migrations after model changes:
+
+```powershell
+alembic revision --autogenerate -m "describe change"
 ```
 
 ## Health Check

@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+from app.models.base import Base
 
 
 settings = get_settings()
@@ -18,6 +19,9 @@ SessionLocal = sessionmaker(
     autoflush=False,
     bind=engine,
 )
+
+
+__all__ = ["Base", "SessionLocal", "engine", "get_database_status", "get_db"]
 
 
 def get_db() -> Generator[Session, None, None]:
