@@ -76,6 +76,13 @@ matrix in `docs/API.md`.
 The backend uses Argon2 password hashing, short-lived JWT access tokens and
 rotating refresh tokens. Configure token settings in `.env`.
 
+## Operational Actions
+
+Phase 6 adds authenticated operational actions for alert acknowledgement,
+incident workflow updates and signal-mode or signal-override requests. Successful
+actions create audit history and publish realtime events. Signal overrides update
+backend state only; no GPIO or device-control execution is included yet.
+
 ## Real-Time Events
 
 Phase 4 adds the shared WebSocket stream for future web and mobile clients:

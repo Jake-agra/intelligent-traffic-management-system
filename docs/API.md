@@ -41,3 +41,22 @@ revoked when rotated or logged out.
 | `GET /api/v1/incidents` | `admin`, `emergency_responder` |
 | `GET /api/v1/devices` | `admin` |
 | `GET /api/v1/dashboard/summary` | `admin`, `analyst` |
+
+## Phase 6 Operational Actions
+
+Mutation endpoints require bearer-token authentication and create audit history.
+Successful actions publish authoritative WebSocket events through the backend
+publisher.
+
+| Endpoint | Roles |
+|---|---|
+| `POST /api/v1/alerts/{alert_id}/acknowledge` | `admin`, `police`, `emergency_responder` |
+| `POST /api/v1/alerts/{alert_id}/resolve` | `admin` |
+| `POST /api/v1/incidents/{incident_id}/acknowledge` | `admin`, `emergency_responder` |
+| `POST /api/v1/incidents/{incident_id}/respond` | `admin`, `emergency_responder` |
+| `POST /api/v1/incidents/{incident_id}/resolve` | `admin`, `emergency_responder` |
+| `POST /api/v1/intersections/{intersection_id}/signal-mode` | `admin` |
+| `POST /api/v1/intersections/{intersection_id}/signal-override` | `admin` |
+
+Signal operations do not control GPIO in this phase. They update backend state,
+create `SignalEvent` history and publish `signal.updated`.

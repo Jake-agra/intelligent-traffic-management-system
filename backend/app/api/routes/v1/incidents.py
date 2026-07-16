@@ -6,9 +6,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db_session, require_roles
 from app.models.enums import IncidentStatus
 from app.models.enums import UserRole
+from app.models.user import User
 from app.repositories import traffic_operations
 from app.schemas.common import PaginatedResponse
+from app.schemas.operations import IncidentActionResponse, OperationalActionRequest
 from app.schemas.traffic_operations import IncidentResponse
+from app.services import operations
 
 
 router = APIRouter(prefix="/incidents", tags=["traffic operations"])
@@ -33,3 +36,54 @@ def list_incidents(
         offset=offset,
     )
     return PaginatedResponse(items=list(items), total=total, limit=limit, offset=offset)
+
+
+@router.post("/{incident_id}/acknowledge", response_model=IncidentActionResponse)
+async def acknowledge_incident(
+    incident_id: uuid.UUID,
+    request: OperationalActionRequest,
+    current_user: User = Depends(
+        require_roles(UserRole.ADMIN, UserRole.EMERGENCY_RESPONDER)
+    ),
+    db: Session = Depends(get_db_session),
+) -> IncidentActionResponse:
+    return await operations.acknowledge_incident(
+        db,
+        incident_id=incident_id,
+        reason=request.reason,
+        user=current_user,
+    )
+
+
+@router.post("/{incident_id}/respond", response_model=IncidentActionResponse)
+async def respond_to_incident(
+    incident_id: uuid.UUID,
+    request: OperationalActionRequest,
+    current_user: User = Depends(
+        require_roles(UserRole.ADMIN, UserRole.EMERGENCY_RESPONDER)
+    ),
+    db: Session = Depends(get_db_session),
+) -> IncidentActionResponse:
+    return await operations.respond_to_incident(
+        db,
+        incident_id=incident_id,
+        reason=request.reason,
+        user=current_user,
+    )
+
+
+@router.post("/{incident_id}/resolve", response_model=IncidentActionResponse)
+async def resolve_incident(
+    incident_id: uuid.UUID,
+    request: OperationalActionRequest,
+    current_user: User = Depends(
+        require_roles(UserRole.ADMIN, UserRole.EMERGENCY_RESPONDER)
+    ),
+    db: Session = Depends(get_db_session),
+) -> IncidentActionResponse:
+    return await operations.resolve_incident(
+        db,
+        incident_id=incident_id,
+        reason=request.reason,
+        user=current_user,
+    )

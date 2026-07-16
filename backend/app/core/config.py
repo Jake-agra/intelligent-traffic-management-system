@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 14
+    max_signal_override_seconds: int = 180
 
     model_config = SettingsConfigDict(
         env_file=".env",

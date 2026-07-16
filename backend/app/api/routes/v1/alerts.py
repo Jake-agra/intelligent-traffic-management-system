@@ -5,9 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_user, get_db_session
 from app.models.enums import AlertStatus
+from app.models.user import User
 from app.repositories import traffic_operations
 from app.schemas.common import PaginatedResponse
+from app.schemas.operations import AlertActionResponse, OperationalActionRequest
 from app.schemas.traffic_operations import AlertResponse
+from app.services import operations
 
 
 router = APIRouter(prefix="/alerts", tags=["traffic operations"])
@@ -30,3 +33,33 @@ def list_alerts(
         offset=offset,
     )
     return PaginatedResponse(items=list(items), total=total, limit=limit, offset=offset)
+
+
+@router.post("/{alert_id}/acknowledge", response_model=AlertActionResponse)
+async def acknowledge_alert(
+    alert_id: uuid.UUID,
+    request: OperationalActionRequest,
+    current_user: User = Depends(get_active_user),
+    db: Session = Depends(get_db_session),
+) -> AlertActionResponse:
+    return await operations.acknowledge_alert(
+        db,
+        alert_id=alert_id,
+        reason=request.reason,
+        user=current_user,
+    )
+
+
+@router.post("/{alert_id}/resolve", response_model=AlertActionResponse)
+async def resolve_alert(
+    alert_id: uuid.UUID,
+    request: OperationalActionRequest,
+    current_user: User = Depends(get_active_user),
+    db: Session = Depends(get_db_session),
+) -> AlertActionResponse:
+    return await operations.resolve_alert(
+        db,
+        alert_id=alert_id,
+        reason=request.reason,
+        user=current_user,
+    )
