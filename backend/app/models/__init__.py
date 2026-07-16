@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.history import AuditLog, DeviceEvent, SignalEvent
 from app.models.traffic import (
     Alert,
     Device,
@@ -14,12 +15,15 @@ from app.models.user import User
 
 __all__ = [
     "Alert",
+    "AuditLog",
     "Base",
     "Device",
+    "DeviceEvent",
     "Incident",
     "Intersection",
     "Lane",
     "SignalState",
+    "SignalEvent",
     "TrafficReading",
     "User",
     "Violation",

@@ -34,6 +34,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin, utc_now
 
 
 if TYPE_CHECKING:
+    from app.models.history import DeviceEvent, SignalEvent
     from app.models.user import User
 
 
@@ -60,6 +61,9 @@ class Intersection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     violations: Mapped[list["Violation"]] = relationship(back_populates="intersection")
     incidents: Mapped[list["Incident"]] = relationship(back_populates="intersection")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="intersection")
+    signal_events: Mapped[list["SignalEvent"]] = relationship(
+        back_populates="intersection"
+    )
 
 
 class Lane(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -86,6 +90,7 @@ class Lane(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     violations: Mapped[list["Violation"]] = relationship(back_populates="lane")
     incidents: Mapped[list["Incident"]] = relationship(back_populates="lane")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="lane")
+    signal_events: Mapped[list["SignalEvent"]] = relationship(back_populates="lane")
 
 
 class Device(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -135,6 +140,7 @@ class Device(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     violations: Mapped[list["Violation"]] = relationship(back_populates="device")
     incidents: Mapped[list["Incident"]] = relationship(back_populates="device")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="device")
+    device_events: Mapped[list["DeviceEvent"]] = relationship(back_populates="device")
 
 
 class TrafficReading(UUIDPrimaryKeyMixin, TimestampMixin, Base):

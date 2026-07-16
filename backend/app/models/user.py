@@ -11,6 +11,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 if TYPE_CHECKING:
+    from app.models.history import AuditLog, SignalEvent
     from app.models.traffic import Alert
 
 
@@ -36,3 +37,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     acknowledged_alerts: Mapped[list["Alert"]] = relationship(
         back_populates="acknowledged_by",
     )
+    signal_events: Mapped[list["SignalEvent"]] = relationship(
+        back_populates="responsible_user",
+    )
+    audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="user")

@@ -62,3 +62,10 @@ class IncidentStatus(str, Enum):
     OPEN = "open"
     INVESTIGATING = "investigating"
     RESOLVED = "resolved"
+
+
+class SignalEventSource(str, Enum):
+    AUTOMATIC = "automatic"
+    MANUAL = "manual"
+    EMERGENCY = "emergency"
+    SIMULATION = "simulation"

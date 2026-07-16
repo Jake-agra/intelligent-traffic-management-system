@@ -17,9 +17,12 @@ def test_model_metadata_can_create_all_tables() -> None:
     assert set(inspector.get_table_names()) == {
         "alerts",
         "devices",
+        "device_events",
         "incidents",
         "intersections",
         "lanes",
+        "audit_logs",
+        "signal_events",
         "signal_states",
         "traffic_readings",
         "users",
