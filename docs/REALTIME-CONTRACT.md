@@ -80,4 +80,13 @@ disconnects from leaving web and mobile clients with stale state.
 - Event versions prevent stale updates from replacing newer state.
 - Role permissions apply equally to web and mobile commands.
 
+## MQTT-originated events
+
+MQTT telemetry is normalized by the backend before any WebSocket publication.
+Device heartbeats can emit `device.status_changed` when status changes. Traffic
+telemetry emits `traffic.updated` after the reading is validated and stored.
+Signal command acknowledgements emit `signal.updated` after the acknowledgement
+payload is validated. MQTT handlers must use the shared realtime publisher rather
+than broadcasting directly.
+
 This contract prevents the web dashboard and mobile app from displaying conflicting traffic, signal, alert, incident or device information.

@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 14
     max_signal_override_seconds: int = 180
+    mqtt_enabled: bool = False
+    mqtt_broker_host: str = "localhost"
+    mqtt_broker_port: int = 1883
+    mqtt_username: str | None = None
+    mqtt_password: str | None = None
+    mqtt_tls_enabled: bool = False
+    mqtt_client_id: str = "itms-backend"
+    mqtt_keepalive_seconds: int = 60
+    mqtt_max_telemetry_age_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=".env",

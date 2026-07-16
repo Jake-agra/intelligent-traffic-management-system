@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.health import router as health_router
 from app.api.routes.v1 import router as v1_router
 from app.core.config import get_settings
+from app.mqtt import mqtt_lifespan
 
 
 settings = get_settings()
@@ -11,6 +12,7 @@ settings = get_settings()
 app = FastAPI(
     title=settings.service_name,
     version=settings.api_version,
+    lifespan=mqtt_lifespan,
 )
 
 app.add_middleware(

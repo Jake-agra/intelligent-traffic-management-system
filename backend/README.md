@@ -83,6 +83,18 @@ incident workflow updates and signal-mode or signal-override requests. Successfu
 actions create audit history and publish realtime events. Signal overrides update
 backend state only; no GPIO or device-control execution is included yet.
 
+## MQTT Foundation
+
+Phase 7 adds a lightweight MQTT service boundary for future Raspberry Pi
+controllers. MQTT is disabled by default and configured with `MQTT_*`
+environment variables. When enabled, a Paho MQTT adapter connects to the
+configured broker. The service validates heartbeat, device telemetry, traffic
+telemetry and signal command acknowledgement payloads, persists the resulting
+operational records and publishes synchronized WebSocket events.
+
+Signal commands are published through the internal MQTT service. API routes
+should not publish MQTT messages directly.
+
 ## Real-Time Events
 
 Phase 4 adds the shared WebSocket stream for future web and mobile clients:

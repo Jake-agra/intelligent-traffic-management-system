@@ -39,6 +39,19 @@ Provides the same live operational information in a mobile-first layout. It supp
 
 The clients never synchronize directly with each other. Both subscribe to the backend as the single source of truth. A command made on one client is validated by the backend, persisted where required and broadcast to every connected client.
 
+## MQTT communication foundation
+
+Phase 7 adds the first backend MQTT boundary for future Raspberry Pi controllers.
+MQTT is disabled by default in development and tests. When enabled, the backend
+subscribes to versioned heartbeat, device telemetry, traffic telemetry and signal
+command acknowledgement topics. Incoming messages are validated, stale or
+duplicate telemetry is rejected, operational records are persisted and matching
+WebSocket events are published through the existing realtime publisher.
+
+Signal command publication is exposed as an internal backend service. API route
+handlers do not publish MQTT messages directly, which keeps later MQTT broker
+or Redis Pub/Sub replacement isolated from HTTP code.
+
 ## Document traceability
 
 | Documented requirement | Implementation area |
