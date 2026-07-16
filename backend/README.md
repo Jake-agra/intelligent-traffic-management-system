@@ -62,3 +62,13 @@ Phase 3 adds read-only shared endpoints for the web dashboard and mobile applica
 - `GET /api/v1/alerts`
 - `GET /api/v1/devices`
 - `GET /api/v1/dashboard/summary`
+
+## Real-Time Events
+
+Phase 4 adds the shared WebSocket stream for future web and mobile clients:
+
+- `WS /api/v1/ws`
+
+Clients receive a connection acknowledgement after subscribing. Optional query
+filters are supported with `intersection_id=<uuid>` and
+`events=traffic.updated,signal.updated`.
