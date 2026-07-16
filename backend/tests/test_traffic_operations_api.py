@@ -29,10 +29,11 @@ from app.models.traffic import (
 def test_dashboard_summary_returns_shared_operational_counts(
     client: TestClient,
     db_session: Session,
+    analyst_headers: dict[str, str],
 ) -> None:
     intersection = _create_live_fixture(db_session)
 
-    response = client.get("/api/v1/dashboard/summary")
+    response = client.get("/api/v1/dashboard/summary", headers=analyst_headers)
 
     assert response.status_code == 200
     body = response.json()
@@ -55,10 +56,14 @@ def test_dashboard_summary_returns_shared_operational_counts(
 def test_intersection_live_state_returns_synchronized_payload(
     client: TestClient,
     db_session: Session,
+    analyst_headers: dict[str, str],
 ) -> None:
     intersection = _create_live_fixture(db_session)
 
-    response = client.get(f"/api/v1/intersections/{intersection.id}/live")
+    response = client.get(
+        f"/api/v1/intersections/{intersection.id}/live",
+        headers=analyst_headers,
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -76,6 +81,7 @@ def test_intersection_live_state_returns_synchronized_payload(
 def test_alerts_endpoint_returns_paginated_alerts(
     client: TestClient,
     db_session: Session,
+    analyst_headers: dict[str, str],
 ) -> None:
     intersection = _create_live_fixture(db_session)
 
@@ -87,6 +93,7 @@ def test_alerts_endpoint_returns_paginated_alerts(
             "limit": 1,
             "offset": 0,
         },
+        headers=analyst_headers,
     )
 
     assert response.status_code == 200
@@ -100,8 +107,12 @@ def test_alerts_endpoint_returns_paginated_alerts(
 
 def test_invalid_intersection_id_returns_not_found(
     client: TestClient,
+    analyst_headers: dict[str, str],
 ) -> None:
-    response = client.get(f"/api/v1/intersections/{uuid.uuid4()}/live")
+    response = client.get(
+        f"/api/v1/intersections/{uuid.uuid4()}/live",
+        headers=analyst_headers,
+    )
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Intersection not found."}

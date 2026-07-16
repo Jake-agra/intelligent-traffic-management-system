@@ -63,6 +63,19 @@ Phase 3 adds read-only shared endpoints for the web dashboard and mobile applica
 - `GET /api/v1/devices`
 - `GET /api/v1/dashboard/summary`
 
+These endpoints require bearer-token authentication according to the access
+matrix in `docs/API.md`.
+
+## Authentication API
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+
+The backend uses Argon2 password hashing, short-lived JWT access tokens and
+rotating refresh tokens. Configure token settings in `.env`.
+
 ## Real-Time Events
 
 Phase 4 adds the shared WebSocket stream for future web and mobile clients:

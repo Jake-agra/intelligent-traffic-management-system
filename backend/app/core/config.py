@@ -12,6 +12,10 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://postgres:postgres@localhost:5432/traffic_management"
     )
     backend_cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    jwt_secret_key: str = "change-this-secret-before-production"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 14
 
     model_config = SettingsConfigDict(
         env_file=".env",

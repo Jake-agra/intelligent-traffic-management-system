@@ -1,3 +1,4 @@
+from app.models.auth import RefreshToken
 from app.models.base import Base
 from app.models.history import AuditLog, DeviceEvent, SignalEvent
 from app.models.traffic import (
@@ -22,6 +23,7 @@ __all__ = [
     "Incident",
     "Intersection",
     "Lane",
+    "RefreshToken",
     "SignalState",
     "SignalEvent",
     "TrafficReading",

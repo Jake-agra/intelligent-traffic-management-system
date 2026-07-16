@@ -24,6 +24,7 @@ def test_model_metadata_can_create_all_tables() -> None:
         "audit_logs",
         "signal_events",
         "signal_states",
+        "refresh_tokens",
         "traffic_readings",
         "users",
         "violations",

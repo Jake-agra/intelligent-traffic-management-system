@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_session
+from app.api.deps import get_active_user, get_db_session
 from app.repositories import traffic_operations
 from app.schemas.traffic_operations import (
     IntersectionDetailResponse,
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/intersections", tags=["traffic operations"])
 
 @router.get("", response_model=list[IntersectionSummaryResponse])
 def list_intersections(
+    _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),
 ) -> list[IntersectionSummaryResponse]:
     return list(traffic_operations.list_intersections(db))
@@ -25,6 +26,7 @@ def list_intersections(
 @router.get("/{intersection_id}", response_model=IntersectionDetailResponse)
 def get_intersection(
     intersection_id: uuid.UUID,
+    _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),
 ) -> IntersectionDetailResponse:
     intersection = traffic_operations.get_intersection(db, intersection_id)
@@ -36,6 +38,7 @@ def get_intersection(
 @router.get("/{intersection_id}/live", response_model=IntersectionLiveResponse)
 def get_intersection_live_state(
     intersection_id: uuid.UUID,
+    _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),
 ) -> IntersectionLiveResponse:
     live_state = traffic_operations.get_intersection_live_state(db, intersection_id)

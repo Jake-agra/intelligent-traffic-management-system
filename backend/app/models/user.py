@@ -11,6 +11,7 @@ from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
 if TYPE_CHECKING:
+    from app.models.auth import RefreshToken
     from app.models.history import AuditLog, SignalEvent
     from app.models.traffic import Alert
 
@@ -20,6 +21,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         SqlEnum(
             UserRole,
@@ -28,7 +30,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             validate_strings=True,
             values_callable=enum_values,
         ),
-        default=UserRole.VIEWER,
+        default=UserRole.ANALYST,
         nullable=False,
         index=True,
     )
@@ -41,3 +43,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="responsible_user",
     )
     audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="user")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        back_populates="user",
+        foreign_keys="RefreshToken.user_id",
+    )

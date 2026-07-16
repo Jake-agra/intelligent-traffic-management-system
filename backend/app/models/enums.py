@@ -11,8 +11,9 @@ def enum_values(enum_type: type[EnumType]) -> list[str]:
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    OPERATOR = "operator"
-    VIEWER = "viewer"
+    POLICE = "police"
+    ANALYST = "analyst"
+    EMERGENCY_RESPONDER = "emergency_responder"
 
 
 class TrafficDensity(str, Enum):
