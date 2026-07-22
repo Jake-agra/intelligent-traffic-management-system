@@ -193,35 +193,58 @@ Startup safe state is all red. Shutdown safe state is all outputs off.
 3. Run the grouped sequence test.
 4. Set `GPIO_ENABLED=true`, `MQTT_ENABLED=true`, broker settings and all four
    `TRAFFIC_LIGHT_*_LANE_ID` values in `raspberry-pi/.env`.
-5. Start the edge service:
+5. In `backend/.env`, set broker settings plus:
+
+```env
+HARDWARE_TEST_INTERSECTION_ID="backend-intersection-uuid"
+HARDWARE_TEST_NORTH_LANE_ID="backend-north-lane-uuid"
+HARDWARE_TEST_SOUTH_LANE_ID="backend-south-lane-uuid"
+HARDWARE_TEST_EAST_LANE_ID="backend-east-lane-uuid"
+HARDWARE_TEST_WEST_LANE_ID="backend-west-lane-uuid"
+```
+
+6. Start the MQTT broker:
+
+```bash
+sudo systemctl start mosquitto
+```
+
+7. Start the backend:
+
+```bash
+cd backend
+.venv/bin/uvicorn app.main:app --reload
+```
+
+8. Start the edge service:
 
 ```bash
 cd raspberry-pi
-/usr/bin/python -m app.main
+. .venv-gpio/bin/activate
+python -m app.main
 ```
 
-6. Publish a test command to the broker. Replace UUIDs with your backend
-   `intersection_id`, mapped `lane_id` and a new `command_id`:
+9. From the backend, send a typed command through the existing MQTT publisher:
 
 ```bash
-mosquitto_pub -h BROKER_HOST -t "itms/v1/intersections/INTERSECTION_UUID/commands/signal" -m '{
-  "command_id": "COMMAND_UUID",
-  "intersection_id": "INTERSECTION_UUID",
-  "lane_id": "LANE_UUID",
-  "signal": "green",
-  "duration_seconds": 5,
-  "reason": "manual_hardware_test",
-  "issued_at": "2026-07-22T12:00:00+00:00"
-}'
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --direction north --signal green --duration 5
 ```
 
-7. Subscribe to acknowledgements:
+The command prints the generated command ID, broker status, publish status,
+matching `accepted` and `executed` acknowledgements, elapsed time and
+`RESULT: PASS` or `RESULT: FAIL`.
+
+Emergency all-red command:
 
 ```bash
-mosquitto_sub -h BROKER_HOST -t "itms/v1/intersections/INTERSECTION_UUID/commands/ack"
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --all-red --yes
 ```
 
-Expected acknowledgements are `accepted` followed by `executed`.
+Expected acknowledgements are `accepted` followed by `executed` for each
+generated command ID. Rejected, failed, duplicate, malformed or timed-out
+acknowledgements are test failures.
 
 ## Rollback Procedure
 

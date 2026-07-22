@@ -16,6 +16,9 @@ intersection controller. The edge service publishes `accepted`, `executed`,
 `rejected`, `failed` and `duplicate` acknowledgements as each command moves
 through validation and GPIO execution.
 
+Phase 11.1 adds a backend developer hardware test that sends one typed command
+through the real MQTT path and waits for Raspberry Pi acknowledgements.
+
 ## Setup
 
 ```powershell
@@ -99,6 +102,42 @@ unknown-lane commands. Duplicate command IDs are acknowledged as `duplicate`
 without re-executing GPIO. GPIO exceptions publish a `failed` acknowledgement.
 
 Startup sets the intersection to all red. Shutdown sets all GPIO outputs off.
+
+## Broker-To-Hardware Integration Test
+
+Prerequisites:
+
+- MQTT broker is running and reachable from the backend and Raspberry Pi.
+- The backend `.env` contains `HARDWARE_TEST_INTERSECTION_ID` and all four
+  `HARDWARE_TEST_*_LANE_ID` values.
+- This service `.env` contains matching `INTERSECTION_ID` and
+  `TRAFFIC_LIGHT_*_LANE_ID` values.
+- One-direction GPIO tests and the grouped GPIO sequence have already passed.
+
+Start the Raspberry Pi service:
+
+```bash
+cd raspberry-pi
+. .venv-gpio/bin/activate
+python -m app.main
+```
+
+From the backend, run:
+
+```bash
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --direction north --signal green --duration 5
+```
+
+The expected flow is `accepted` then `executed` for the same command ID. The Pi
+holds the requested state for the configured duration, then returns to all red.
+
+Emergency all-red command:
+
+```bash
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --all-red --yes
+```
 
 ## Development Mode
 

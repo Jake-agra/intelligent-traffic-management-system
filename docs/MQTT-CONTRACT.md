@@ -21,6 +21,14 @@ Required settings when MQTT is enabled:
 - `MQTT_KEEPALIVE_SECONDS`
 - `MQTT_MAX_TELEMETRY_AGE_SECONDS`
 
+Backend hardware integration-test settings:
+
+- `HARDWARE_TEST_INTERSECTION_ID`
+- `HARDWARE_TEST_NORTH_LANE_ID`
+- `HARDWARE_TEST_SOUTH_LANE_ID`
+- `HARDWARE_TEST_EAST_LANE_ID`
+- `HARDWARE_TEST_WEST_LANE_ID`
+
 Raspberry Pi edge-service settings:
 
 - `DEVICE_ID`
@@ -168,6 +176,72 @@ already processed, it publishes `duplicate` and does not execute GPIO again. If
 GPIO execution fails, it publishes `failed`.
 
 The backend validates the acknowledgement and publishes `signal.updated`.
+
+## Hardware Signal Test Tool
+
+Phase 11.1 provides a controlled backend command that exercises the existing
+broker-to-hardware path:
+
+Backend command publisher -> MQTT broker -> Raspberry Pi edge service ->
+`IntersectionController` -> GPIO traffic lights -> MQTT acknowledgement ->
+backend acknowledgement handler.
+
+Prerequisites:
+
+- MQTT broker is running and reachable from both backend and Raspberry Pi.
+- Backend `.env` has `MQTT_*` settings plus `HARDWARE_TEST_*` intersection and
+  lane UUID mappings.
+- Raspberry Pi `.env` has matching `INTERSECTION_ID`,
+  `TRAFFIC_LIGHT_*_LANE_ID`, `MQTT_ENABLED=true` and `GPIO_ENABLED=true`.
+- Raspberry Pi wiring has already passed one-direction-at-a-time GPIO tests.
+
+Start the broker:
+
+```bash
+sudo systemctl start mosquitto
+```
+
+Start the backend:
+
+```bash
+cd backend
+.venv/bin/uvicorn app.main:app --reload
+```
+
+Start the Raspberry Pi service:
+
+```bash
+cd raspberry-pi
+. .venv-gpio/bin/activate
+python -m app.main
+```
+
+Run a north-green hardware test from the backend:
+
+```bash
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --direction north --signal green --duration 5
+```
+
+Expected acknowledgement lifecycle:
+
+1. `accepted` for the generated command ID
+2. `executed` for the same command ID
+3. The tool waits for the command duration while the Pi returns to its safe
+   all-red state after expiration
+4. `RESULT: PASS`
+
+Emergency all-red command:
+
+```bash
+cd backend
+.venv/bin/python -m app.tools.hardware_signal_test --all-red --yes
+```
+
+The tool uses typed `SignalCommandPayload` messages and
+`MQTTService.publish_signal_command()`. It does not publish raw MQTT payloads.
+Rejected, failed, duplicate, malformed or timed-out acknowledgements are test
+failures.
 
 ## Validation Rules
 
