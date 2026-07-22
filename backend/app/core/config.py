@@ -1,4 +1,5 @@
 from functools import lru_cache
+import uuid
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     mqtt_client_id: str = "itms-backend"
     mqtt_keepalive_seconds: int = 60
     mqtt_max_telemetry_age_seconds: int = 300
+    hardware_test_intersection_id: uuid.UUID | None = None
+    hardware_test_north_lane_id: uuid.UUID | None = None
+    hardware_test_south_lane_id: uuid.UUID | None = None
+    hardware_test_east_lane_id: uuid.UUID | None = None
+    hardware_test_west_lane_id: uuid.UUID | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
