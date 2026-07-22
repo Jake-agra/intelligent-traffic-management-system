@@ -61,6 +61,18 @@ and publishes command acknowledgements. GPIO, camera and computer-vision
 execution remain out of scope for this phase so the service can run on a
 developer machine or Raspberry Pi without hardware-specific imports.
 
+## Isolated GPIO intersection control
+
+Phase 10 expands the isolated Raspberry Pi GPIO work into a configurable
+four-way intersection controller. The GPIO layer models four traffic-light
+modules, one each for north, south, east and west, with fake GPIO support for
+tests and real GPIO support only when explicitly enabled. Grouped controller
+operations keep north/south green phases separate from east/west green phases
+and provide all-red, all-off and cleanup paths for safe hardware testing.
+
+MQTT signal commands are not connected to GPIO in this phase. The edge service
+continues to acknowledge MQTT commands without executing hardware changes.
+
 ## Document traceability
 
 | Documented requirement | Implementation area |
