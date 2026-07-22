@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     heartbeat_interval_seconds: float = Field(default=30, gt=0)
     telemetry_interval_seconds: float = Field(default=30, gt=0)
     command_max_age_seconds: int = Field(default=300, gt=0)
+    gpio_enabled: bool = False
+    traffic_light_north_red_pin: int = Field(default=22, ge=0)
+    traffic_light_north_yellow_pin: int = Field(default=27, ge=0)
+    traffic_light_north_green_pin: int = Field(default=17, ge=0)
+    traffic_light_south_red_pin: int = Field(default=5, ge=0)
+    traffic_light_south_yellow_pin: int = Field(default=6, ge=0)
+    traffic_light_south_green_pin: int = Field(default=13, ge=0)
+    traffic_light_east_red_pin: int = Field(default=19, ge=0)
+    traffic_light_east_yellow_pin: int = Field(default=26, ge=0)
+    traffic_light_east_green_pin: int = Field(default=21, ge=0)
+    traffic_light_west_red_pin: int = Field(default=16, ge=0)
+    traffic_light_west_yellow_pin: int = Field(default=20, ge=0)
+    traffic_light_west_green_pin: int = Field(default=12, ge=0)
+    traffic_light_green_pin: int = Field(default=17, ge=0)
+    traffic_light_yellow_pin: int = Field(default=27, ge=0)
+    traffic_light_red_pin: int = Field(default=22, ge=0)
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
