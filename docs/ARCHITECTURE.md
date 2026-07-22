@@ -88,6 +88,43 @@ all-red transition, active timed commands can be replaced by newer accepted
 commands and timed holds expire back to all red. Startup initializes the
 intersection to all red and shutdown turns all outputs off.
 
+## Production-style web dashboard
+
+Phase 12 introduces `web-dashboard/`, a React + TypeScript operations dashboard
+that treats the FastAPI backend as the single source of truth. The browser
+authenticates through the existing JWT login, refresh, logout and `/me`
+endpoints, then loads operational views from the established API routes.
+
+The dashboard connects to the existing `/api/v1/ws` WebSocket endpoint and
+applies `traffic.updated`, `signal.updated`, incident, alert, violation and
+device events to refresh visible state. Reconnection uses bounded backoff, event
+IDs are deduplicated and HTTP data remains visible if the socket disconnects.
+
+Admin-only signal controls call the backend signal-mode and signal-override
+HTTP endpoints. The browser never publishes MQTT directly. The resulting
+control flow is:
+
+Web dashboard -> FastAPI authenticated API -> backend validation -> MQTT ->
+Raspberry Pi edge service -> GPIO traffic lights.
+
+## Local development stabilization
+
+Phase 12.1 keeps local backend development deterministic on the Raspberry Pi.
+Backend tests set a test environment before importing the FastAPI app, force
+MQTT off and use an in-memory SQLite database so a developer `.env` cannot leak
+real broker or database settings into pytest.
+
+The backend route layer uses async FastAPI handlers and async dependency
+wrappers around the existing synchronous SQLAlchemy services. This avoids
+Starlette's worker-thread execution path for route handlers during local tests,
+which can hang on the Raspberry Pi Python 3.13 environment. WebSocket behavior
+is tested through the shared connection manager and realtime publisher with
+fake websocket objects, while MQTT tests use fake clients and no network.
+
+The local demo seed command creates or updates a demo admin user, deterministic
+four-way intersection lane IDs and safe red signal states. It is guarded against
+accidental production execution.
+
 ## Document traceability
 
 | Documented requirement | Implementation area |

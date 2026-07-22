@@ -11,7 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["traffic operations"])
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
-def get_dashboard_summary(
+async def get_dashboard_summary(
     _current_user=Depends(require_roles(UserRole.ADMIN, UserRole.ANALYST)),
     db: Session = Depends(get_db_session),
 ) -> DashboardSummaryResponse:

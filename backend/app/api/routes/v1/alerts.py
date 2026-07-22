@@ -17,7 +17,7 @@ router = APIRouter(prefix="/alerts", tags=["traffic operations"])
 
 
 @router.get("", response_model=PaginatedResponse[AlertResponse])
-def list_alerts(
+async def list_alerts(
     intersection_id: uuid.UUID | None = None,
     status: AlertStatus | None = None,
     limit: int = Query(default=50, ge=1, le=100),

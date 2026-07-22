@@ -19,7 +19,17 @@ async def mqtt_lifespan(app: FastAPI) -> AsyncIterator[None]:
             session_factory=SessionLocal,
         )
         app.state.mqtt_service = service
-        await service.start()
-    yield
-    if service is not None:
-        await service.stop()
+        try:
+            await service.start()
+        except Exception:
+            await service.stop()
+            if hasattr(app.state, "mqtt_service"):
+                del app.state.mqtt_service
+            raise
+    try:
+        yield
+    finally:
+        if service is not None:
+            await service.stop()
+            if hasattr(app.state, "mqtt_service"):
+                del app.state.mqtt_service

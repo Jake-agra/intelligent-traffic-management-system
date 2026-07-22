@@ -14,7 +14,7 @@ router = APIRouter(prefix="/violations", tags=["traffic operations"])
 
 
 @router.get("", response_model=PaginatedResponse[ViolationResponse])
-def list_violations(
+async def list_violations(
     intersection_id: uuid.UUID | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

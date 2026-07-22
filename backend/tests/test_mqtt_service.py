@@ -5,7 +5,6 @@ import json
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -52,6 +51,18 @@ class FakeMQTTClient:
 
     def set_message_handler(self, handler: MessageHandler) -> None:
         self.handler = handler
+
+
+class FakeWebSocket:
+    def __init__(self) -> None:
+        self.accepted = False
+        self.sent: list[dict[str, object]] = []
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, message: dict[str, object]) -> None:
+        self.sent.append(message)
 
 
 @pytest.fixture(autouse=True)
@@ -257,16 +268,16 @@ def test_signal_command_publication(
 
 
 def test_command_acknowledgement_publishes_signal_update(
-    client: TestClient,
     mqtt_service: MQTTService,
 ) -> None:
     intersection_id = uuid.uuid4()
-    with client.websocket_connect(
-        f"/api/v1/ws?events={RealtimeEventName.SIGNAL_UPDATED.value}"
-    ) as websocket:
-        websocket.receive_json()
-        delivered = client.portal.call(
-            mqtt_service.process_signal_command_ack,
+    websocket = FakeWebSocket()
+    _connect_fake_websocket(
+        websocket,
+        events=frozenset([RealtimeEventName.SIGNAL_UPDATED]),
+    )
+    delivered = _run(
+        mqtt_service.process_signal_command_ack(
             SignalCommandAckPayload(
                 command_id=uuid.uuid4(),
                 intersection_id=intersection_id,
@@ -274,9 +285,10 @@ def test_command_acknowledgement_publishes_signal_update(
                 status="accepted",
                 message="Command queued",
                 acknowledged_at=datetime.now(UTC),
-            ),
+            )
         )
-        message = websocket.receive_json()
+    )
+    message = websocket.sent[1]
 
     assert delivered is None
     assert message["event"] == RealtimeEventName.SIGNAL_UPDATED.value
@@ -305,29 +317,30 @@ def test_phase_11_command_acknowledgement_status_compatibility(
 
 
 def test_websocket_publication_from_traffic_telemetry(
-    client: TestClient,
     db_session: Session,
     mqtt_service: MQTTService,
 ) -> None:
     context = _create_mqtt_context(db_session)
+    websocket = FakeWebSocket()
 
-    with client.websocket_connect(
-        f"/api/v1/ws?events={RealtimeEventName.TRAFFIC_UPDATED.value}"
-    ) as websocket:
-        websocket.receive_json()
-        delivered = client.portal.call(
-            mqtt_service.process_traffic_telemetry,
+    _connect_fake_websocket(
+        websocket,
+        events=frozenset([RealtimeEventName.TRAFFIC_UPDATED]),
+    )
+    delivered = _run(
+        mqtt_service.process_traffic_telemetry(
             db_session,
             _traffic_payload(context),
         )
-        message = websocket.receive_json()
+    )
+    message = websocket.sent[1]
 
     assert delivered is None
     assert message["event"] == RealtimeEventName.TRAFFIC_UPDATED.value
     assert message["intersection_id"] == str(context["intersection"].id)
 
 
-def test_mqtt_disabled_application_startup(client: TestClient) -> None:
+def test_mqtt_disabled_application_startup(client) -> None:
     response = client.get("/api/health")
 
     assert response.status_code == 200
@@ -340,6 +353,21 @@ def _session_factory(db_session: Session) -> Callable[[], Session]:
 
 def _run(awaitable: Awaitable[object]) -> object:
     return asyncio.run(awaitable)
+
+
+def _connect_fake_websocket(
+    websocket: FakeWebSocket,
+    *,
+    intersection_id: uuid.UUID | None = None,
+    events: frozenset[RealtimeEventName] | None = None,
+) -> uuid.UUID:
+    return _run(
+        websocket_manager.connect(
+            websocket,
+            intersection_id=intersection_id,
+            events=events,
+        )
+    )
 
 
 def _create_mqtt_context(

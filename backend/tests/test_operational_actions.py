@@ -15,6 +15,7 @@ from app.models.enums import (
 )
 from app.models.history import AuditLog, SignalEvent
 from app.models.traffic import Alert, Incident, Intersection, Lane, SignalState
+from app.realtime import websocket_manager
 from app.schemas.realtime import RealtimeEventName
 from tests.conftest import auth_headers_for, create_test_user
 
@@ -319,21 +320,36 @@ def test_websocket_event_publication(
 ) -> None:
     context = _create_context(db_session)
     user = create_test_user(db_session, email="ws-admin@example.com", role=UserRole.ADMIN)
+    websocket = FakeWebSocket()
 
-    with client.websocket_connect(
-        f"/api/v1/ws?events={RealtimeEventName.ALERT_ACKNOWLEDGED.value}"
-    ) as websocket:
-        websocket.receive_json()
-        response = client.post(
-            f"/api/v1/alerts/{context['alert'].id}/acknowledge",
-            json={"reason": "Publish"},
-            headers=auth_headers_for(user),
-        )
-        message = websocket.receive_json()
+    client.portal.call(
+        websocket_manager.connect,
+        websocket,
+        intersection_id=None,
+        events=frozenset([RealtimeEventName.ALERT_ACKNOWLEDGED]),
+    )
+    response = client.post(
+        f"/api/v1/alerts/{context['alert'].id}/acknowledge",
+        json={"reason": "Publish"},
+        headers=auth_headers_for(user),
+    )
+    message = websocket.sent[1]
 
     assert response.status_code == 200
     assert message["event"] == RealtimeEventName.ALERT_ACKNOWLEDGED.value
     assert message["intersection_id"] == str(context["intersection"].id)
+
+
+class FakeWebSocket:
+    def __init__(self) -> None:
+        self.accepted = False
+        self.sent: list[dict[str, object]] = []
+
+    async def accept(self) -> None:
+        self.accepted = True
+
+    async def send_json(self, message: dict[str, object]) -> None:
+        self.sent.append(message)
 
 
 def _create_context(

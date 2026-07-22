@@ -15,7 +15,7 @@ router = APIRouter(prefix="/devices", tags=["traffic operations"])
 
 
 @router.get("", response_model=PaginatedResponse[DeviceHealthResponse])
-def list_devices(
+async def list_devices(
     intersection_id: uuid.UUID | None = None,
     status: DeviceStatus | None = None,
     limit: int = Query(default=50, ge=1, le=100),

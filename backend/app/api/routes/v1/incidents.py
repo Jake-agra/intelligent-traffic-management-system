@@ -18,7 +18,7 @@ router = APIRouter(prefix="/incidents", tags=["traffic operations"])
 
 
 @router.get("", response_model=PaginatedResponse[IncidentResponse])
-def list_incidents(
+async def list_incidents(
     intersection_id: uuid.UUID | None = None,
     status: IncidentStatus | None = None,
     limit: int = Query(default=50, ge=1, le=100),

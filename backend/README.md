@@ -22,6 +22,33 @@ Copy-Item .env.example .env
 
 Update `.env` with the PostgreSQL connection string for your local environment.
 
+For Raspberry Pi/local Linux development from the repository root:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+If PostgreSQL is not running locally, use SQLite in `backend/.env`:
+
+```text
+DATABASE_URL="sqlite+pysqlite:///./itms_local.db"
+MQTT_ENABLED="false"
+```
+
+Then seed an admin user and demo four-way intersection:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed_demo
+```
+
+The seed command is idempotent. It creates or updates the local admin user,
+the demo intersection, north/south/east/west lanes and safe red signal states.
+It refuses to run when `ENVIRONMENT=production` unless `--allow-production` is
+passed deliberately.
+
 ## Run
 
 ```powershell
@@ -33,6 +60,17 @@ uvicorn app.main:app --reload
 ```powershell
 pytest
 ```
+
+On the Raspberry Pi/local Linux environment:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+.venv/bin/python -m pytest
+```
+
+The backend test harness forces `ENVIRONMENT=test`, `MQTT_ENABLED=false` and an
+in-memory SQLite database before importing the app. This prevents a developer
+`.env` from starting MQTT or pointing tests at a real database.
 
 ## Migrations
 

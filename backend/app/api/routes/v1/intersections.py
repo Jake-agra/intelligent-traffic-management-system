@@ -25,7 +25,7 @@ router = APIRouter(prefix="/intersections", tags=["traffic operations"])
 
 
 @router.get("", response_model=list[IntersectionSummaryResponse])
-def list_intersections(
+async def list_intersections(
     _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),
 ) -> list[IntersectionSummaryResponse]:
@@ -33,7 +33,7 @@ def list_intersections(
 
 
 @router.get("/{intersection_id}", response_model=IntersectionDetailResponse)
-def get_intersection(
+async def get_intersection(
     intersection_id: uuid.UUID,
     _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),
@@ -45,7 +45,7 @@ def get_intersection(
 
 
 @router.get("/{intersection_id}/live", response_model=IntersectionLiveResponse)
-def get_intersection_live_state(
+async def get_intersection_live_state(
     intersection_id: uuid.UUID,
     _current_user=Depends(get_active_user),
     db: Session = Depends(get_db_session),

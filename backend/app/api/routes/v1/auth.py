@@ -24,7 +24,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenPairResponse)
-def login(
+async def login(
     request: LoginRequest,
     db: Session = Depends(get_db_session),
 ) -> TokenPairResponse:
@@ -38,7 +38,7 @@ def login(
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-def refresh(
+async def refresh(
     request: RefreshRequest,
     db: Session = Depends(get_db_session),
 ) -> TokenPairResponse:
@@ -52,7 +52,7 @@ def refresh(
 
 
 @router.post("/logout", response_model=LogoutResponse)
-def logout(
+async def logout(
     request: LogoutRequest,
     db: Session = Depends(get_db_session),
 ) -> LogoutResponse:
@@ -64,5 +64,5 @@ def logout(
 
 
 @router.get("/me", response_model=UserProfile)
-def me(current_user: User = Depends(get_active_user)) -> User:
+async def me(current_user: User = Depends(get_active_user)) -> User:
     return current_user
