@@ -21,7 +21,10 @@ class SignalColor(str, Enum):
 
 class CommandAckStatus(str, Enum):
     ACCEPTED = "accepted"
+    EXECUTED = "executed"
     REJECTED = "rejected"
+    FAILED = "failed"
+    DUPLICATE = "duplicate"
 
 
 class EdgeBaseModel(BaseModel):

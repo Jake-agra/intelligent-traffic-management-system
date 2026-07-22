@@ -11,6 +11,8 @@ def test_configuration_loading(monkeypatch) -> None:
     monkeypatch.setenv("MQTT_ENABLED", "true")
     monkeypatch.setenv("HEARTBEAT_INTERVAL_SECONDS", "5")
     monkeypatch.setenv("TRAFFIC_LIGHT_WEST_GREEN_PIN", "12")
+    monkeypatch.setenv("TRAFFIC_LIGHT_NORTH_LANE_ID", str(uuid.uuid4()))
+    monkeypatch.setenv("SIGNAL_COMMAND_MAX_DURATION_SECONDS", "45")
 
     settings = Settings(_env_file=None)
 
@@ -20,3 +22,5 @@ def test_configuration_loading(monkeypatch) -> None:
     assert settings.heartbeat_interval_seconds == 5
     assert settings.traffic_light_north_red_pin == 22
     assert settings.traffic_light_west_green_pin == 12
+    assert settings.traffic_light_north_lane_id is not None
+    assert settings.signal_command_max_duration_seconds == 45

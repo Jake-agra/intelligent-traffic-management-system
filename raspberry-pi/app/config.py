@@ -22,7 +22,13 @@ class Settings(BaseSettings):
     heartbeat_interval_seconds: float = Field(default=30, gt=0)
     telemetry_interval_seconds: float = Field(default=30, gt=0)
     command_max_age_seconds: int = Field(default=300, gt=0)
+    signal_command_max_duration_seconds: int = Field(default=60, gt=0)
+    signal_all_red_transition_seconds: float = Field(default=0.2, ge=0)
     gpio_enabled: bool = False
+    traffic_light_north_lane_id: str | None = None
+    traffic_light_south_lane_id: str | None = None
+    traffic_light_east_lane_id: str | None = None
+    traffic_light_west_lane_id: str | None = None
     traffic_light_north_red_pin: int = Field(default=22, ge=0)
     traffic_light_north_yellow_pin: int = Field(default=27, ge=0)
     traffic_light_north_green_pin: int = Field(default=17, ge=0)
@@ -51,3 +57,16 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
         return value.upper()
+
+    @field_validator(
+        "traffic_light_north_lane_id",
+        "traffic_light_south_lane_id",
+        "traffic_light_east_lane_id",
+        "traffic_light_west_lane_id",
+        mode="before",
+    )
+    @classmethod
+    def normalize_optional_lane_id(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value

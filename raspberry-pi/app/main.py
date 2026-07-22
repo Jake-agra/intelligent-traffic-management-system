@@ -7,7 +7,9 @@ import signal
 from app.command_handler import CommandHandler, signal_command_topic
 from app.config import Settings
 from app.mqtt_client import FakeMQTTClient, MQTTClientProtocol, PahoMQTTClient
+from app.signal_executor import SignalCommandExecutor
 from app.telemetry import TelemetryProvider
+from app.traffic_light import IntersectionController, create_intersection_controller
 
 
 def configure_logging(settings: Settings) -> None:
@@ -24,17 +26,29 @@ class EdgeService:
         settings: Settings,
         mqtt_client: MQTTClientProtocol | None = None,
         telemetry_provider: TelemetryProvider | None = None,
+        intersection_controller: IntersectionController | None = None,
+        signal_executor: SignalCommandExecutor | None = None,
     ) -> None:
         self.settings = settings
         self.mqtt_client = mqtt_client or (
             PahoMQTTClient(settings) if settings.mqtt_enabled else FakeMQTTClient()
         )
         self.telemetry_provider = telemetry_provider or TelemetryProvider(settings)
-        self.command_handler = CommandHandler(settings, self.mqtt_client)
+        self.intersection_controller = intersection_controller or create_intersection_controller(
+            settings,
+            fake=not settings.gpio_enabled,
+        )
+        self.signal_executor = signal_executor or SignalCommandExecutor(
+            settings=settings,
+            mqtt_client=self.mqtt_client,
+            controller=self.intersection_controller,
+        )
+        self.command_handler = CommandHandler(settings, self.mqtt_client, self.signal_executor)
         self._tasks: list[asyncio.Task[None]] = []
         self._logger = logging.getLogger(__name__)
 
     async def start(self) -> None:
+        self.signal_executor.startup_safe_state()
         self.mqtt_client.set_message_handler(self.command_handler.handle_message)
         if self.settings.mqtt_enabled:
             await self.mqtt_client.connect()
@@ -50,6 +64,7 @@ class EdgeService:
             task.cancel()
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
+        await self.signal_executor.shutdown_safe_state()
         await self.mqtt_client.disconnect()
         self._logger.info("Raspberry Pi edge service stopped")
 

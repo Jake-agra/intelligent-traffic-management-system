@@ -283,6 +283,27 @@ def test_command_acknowledgement_publishes_signal_update(
     assert message["intersection_id"] == str(intersection_id)
 
 
+@pytest.mark.parametrize(
+    "status",
+    ["accepted", "executed", "rejected", "failed", "duplicate"],
+)
+def test_phase_11_command_acknowledgement_status_compatibility(
+    mqtt_service: MQTTService,
+    status: str,
+) -> None:
+    payload = SignalCommandAckPayload(
+        command_id=uuid.uuid4(),
+        intersection_id=uuid.uuid4(),
+        lane_id=uuid.uuid4(),
+        status=status,
+        message=f"{status} acknowledgement",
+        device_id=uuid.uuid4(),
+        acknowledged_at=datetime.now(UTC),
+    )
+
+    _run(mqtt_service.process_signal_command_ack(payload))
+
+
 def test_websocket_publication_from_traffic_telemetry(
     client: TestClient,
     db_session: Session,

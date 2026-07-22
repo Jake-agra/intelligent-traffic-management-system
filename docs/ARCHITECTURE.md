@@ -73,6 +73,21 @@ and provide all-red, all-off and cleanup paths for safe hardware testing.
 MQTT signal commands are not connected to GPIO in this phase. The edge service
 continues to acknowledge MQTT commands without executing hardware changes.
 
+## MQTT-to-GPIO execution
+
+Phase 11 connects validated Raspberry Pi MQTT signal commands to the isolated
+four-way GPIO intersection controller. The edge service maps configured backend
+lane identifiers to physical directions, publishes an `accepted`
+acknowledgement after validation, executes GPIO through the controller, then
+publishes `executed` only after hardware state changes succeed.
+
+Safety is handled at the edge. Wrong-intersection, stale, malformed,
+excessive-duration, unknown-lane and duplicate command IDs are rejected or
+deduplicated before execution. Cross-axis right-of-way changes pass through an
+all-red transition, active timed commands can be replaced by newer accepted
+commands and timed holds expire back to all red. Startup initializes the
+intersection to all red and shutdown turns all outputs off.
+
 ## Document traceability
 
 | Documented requirement | Implementation area |

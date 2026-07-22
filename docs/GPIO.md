@@ -1,7 +1,8 @@
 # Raspberry Pi GPIO Intersection
 
 Phase 10 provides isolated manual GPIO control for four 4-pin traffic-light
-modules. MQTT commands are not connected to GPIO in this phase.
+modules. Phase 11 connects validated MQTT signal commands to the same
+four-way controller.
 
 ## Module Pins
 
@@ -152,3 +153,82 @@ python -m app.intersection_test --sequence --green-seconds 3 --yellow-seconds 2
   `TRAFFIC_LIGHT_*_PIN` value before running hardware tests.
 - If the Pi restarts or behaves unexpectedly, power it off and recheck ground,
   voltage compatibility and any current-limiting requirements for the modules.
+
+## MQTT Command Execution
+
+The Raspberry Pi edge service maps backend lane UUIDs to physical directions
+with these `.env` settings:
+
+| Setting | Physical direction |
+|---|---|
+| `TRAFFIC_LIGHT_NORTH_LANE_ID` | north |
+| `TRAFFIC_LIGHT_SOUTH_LANE_ID` | south |
+| `TRAFFIC_LIGHT_EAST_LANE_ID` | east |
+| `TRAFFIC_LIGHT_WEST_LANE_ID` | west |
+
+Do not hard-code database UUIDs in application code. Keep the mapping in the
+real `raspberry-pi/.env` file.
+
+Command flow:
+
+1. MQTT command arrives on `itms/v1/intersections/{intersection_id}/commands/signal`.
+2. The edge service validates intersection, lane mapping, signal colour,
+   staleness, duplicate command ID and duration limit.
+3. Valid commands publish `accepted`.
+4. GPIO executes through `IntersectionController`.
+5. Successful GPIO execution publishes `executed`.
+6. The command holds for `duration_seconds` asynchronously.
+7. Expiration returns the intersection to all red.
+
+Right-of-way changes between north/south and east/west pass through all red for
+`SIGNAL_ALL_RED_TRANSITION_SECONDS`. Duplicate command IDs publish `duplicate`
+and do not run GPIO again. GPIO exceptions publish `failed`.
+
+Startup safe state is all red. Shutdown safe state is all outputs off.
+
+## Broker-To-Hardware Test Procedure
+
+1. Power off the Pi and verify wiring.
+2. Run one-module-at-a-time direction tests.
+3. Run the grouped sequence test.
+4. Set `GPIO_ENABLED=true`, `MQTT_ENABLED=true`, broker settings and all four
+   `TRAFFIC_LIGHT_*_LANE_ID` values in `raspberry-pi/.env`.
+5. Start the edge service:
+
+```bash
+cd raspberry-pi
+/usr/bin/python -m app.main
+```
+
+6. Publish a test command to the broker. Replace UUIDs with your backend
+   `intersection_id`, mapped `lane_id` and a new `command_id`:
+
+```bash
+mosquitto_pub -h BROKER_HOST -t "itms/v1/intersections/INTERSECTION_UUID/commands/signal" -m '{
+  "command_id": "COMMAND_UUID",
+  "intersection_id": "INTERSECTION_UUID",
+  "lane_id": "LANE_UUID",
+  "signal": "green",
+  "duration_seconds": 5,
+  "reason": "manual_hardware_test",
+  "issued_at": "2026-07-22T12:00:00+00:00"
+}'
+```
+
+7. Subscribe to acknowledgements:
+
+```bash
+mosquitto_sub -h BROKER_HOST -t "itms/v1/intersections/INTERSECTION_UUID/commands/ack"
+```
+
+Expected acknowledgements are `accepted` followed by `executed`.
+
+## Rollback Procedure
+
+If a light behaves incorrectly:
+
+1. Stop the edge service with `Ctrl+C`; shutdown turns outputs off.
+2. Set `GPIO_ENABLED=false` in `raspberry-pi/.env`.
+3. Power off the Pi before touching wires.
+4. Recheck shared ground, BCM pin mapping and lane-to-direction mapping.
+5. Run direction tests again before re-enabling MQTT execution.

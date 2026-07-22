@@ -2,7 +2,8 @@
 
 Phase 7 defines the initial MQTT foundation between the backend and future
 Raspberry Pi controllers. Phase 8 adds the matching Raspberry Pi edge-service
-foundation. GPIO control is not included in either phase.
+foundation. Phase 11 connects validated Raspberry Pi signal commands to GPIO
+execution through the edge service.
 
 ## Configuration
 
@@ -36,6 +37,12 @@ Raspberry Pi edge-service settings:
 - `HEARTBEAT_INTERVAL_SECONDS`
 - `TELEMETRY_INTERVAL_SECONDS`
 - `COMMAND_MAX_AGE_SECONDS`
+- `SIGNAL_COMMAND_MAX_DURATION_SECONDS`
+- `SIGNAL_ALL_RED_TRANSITION_SECONDS`
+- `TRAFFIC_LIGHT_NORTH_LANE_ID`
+- `TRAFFIC_LIGHT_SOUTH_LANE_ID`
+- `TRAFFIC_LIGHT_EAST_LANE_ID`
+- `TRAFFIC_LIGHT_WEST_LANE_ID`
 
 ## Topics
 
@@ -113,6 +120,19 @@ The backend validates the intersection and lane relationship, stores a
 Signal commands are published through the internal MQTT service, not directly
 from API route handlers.
 
+The Raspberry Pi maps `lane_id` to a configured physical direction:
+
+| Setting | Direction |
+|---|---|
+| `TRAFFIC_LIGHT_NORTH_LANE_ID` | north |
+| `TRAFFIC_LIGHT_SOUTH_LANE_ID` | south |
+| `TRAFFIC_LIGHT_EAST_LANE_ID` | east |
+| `TRAFFIC_LIGHT_WEST_LANE_ID` | west |
+
+The command is rejected if the lane is not mapped, belongs to another
+intersection context, is stale, malformed or requests a duration above
+`SIGNAL_COMMAND_MAX_DURATION_SECONDS`.
+
 ## Signal Command Acknowledgement
 
 ```json
@@ -127,6 +147,26 @@ from API route handlers.
 }
 ```
 
+Supported acknowledgement statuses:
+
+- `accepted`
+- `executed`
+- `rejected`
+- `failed`
+- `duplicate`
+
+Acknowledgement lifecycle:
+
+1. Valid command received by the Raspberry Pi.
+2. Edge service publishes `accepted`.
+3. GPIO safe transition and requested state are applied.
+4. Edge service publishes `executed`.
+5. Timed hold expires and the edge service returns to all red.
+
+If validation fails, the service publishes `rejected`. If the command ID was
+already processed, it publishes `duplicate` and does not execute GPIO again. If
+GPIO execution fails, it publishes `failed`.
+
 The backend validates the acknowledgement and publishes `signal.updated`.
 
 ## Validation Rules
@@ -136,3 +176,7 @@ The backend validates the acknowledgement and publishes `signal.updated`.
 - Duplicate messages are rejected in-process using payload identity keys.
 - Unknown devices, intersections and lane/intersection mismatches are rejected.
 - Malformed payloads are logged and do not crash the service.
+- Raspberry Pi command execution never permits north/south green at the same
+  time as east/west green.
+- Right-of-way changes between axes pass through all red for
+  `SIGNAL_ALL_RED_TRANSITION_SECONDS`.
