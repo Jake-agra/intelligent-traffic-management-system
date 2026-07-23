@@ -78,6 +78,51 @@ def test_intersection_live_state_returns_synchronized_payload(
     assert body["generated_at"].endswith("Z")
 
 
+def test_intersection_live_state_returns_latest_signal_state_per_lane(
+    client: TestClient,
+    db_session: Session,
+    analyst_headers: dict[str, str],
+) -> None:
+    intersection = _create_live_fixture(db_session)
+    lane = intersection.lanes[0]
+    tie_time = datetime.now(UTC)
+    db_session.add_all(
+        [
+            SignalState(
+                id=uuid.UUID("00000000-0000-0000-0000-000000000401"),
+                intersection_id=intersection.id,
+                lane_id=lane.id,
+                color=SignalColor.RED,
+                operating_mode=OperatingMode.MANUAL,
+                started_at=tie_time,
+                ends_at=None,
+            ),
+            SignalState(
+                id=uuid.UUID("00000000-0000-0000-0000-000000000402"),
+                intersection_id=intersection.id,
+                lane_id=lane.id,
+                color=SignalColor.YELLOW,
+                operating_mode=OperatingMode.MANUAL,
+                started_at=tie_time,
+                ends_at=None,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/api/v1/intersections/{intersection.id}/live",
+        headers=analyst_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(db_session.query(SignalState).all()) == 3
+    assert len(body["current_signal_states"]) == 1
+    assert body["current_signal_states"][0]["color"] == SignalColor.YELLOW.value
+    assert body["current_signal_states"][0]["id"] == "00000000-0000-0000-0000-000000000402"
+
+
 def test_alerts_endpoint_returns_paginated_alerts(
     client: TestClient,
     db_session: Session,

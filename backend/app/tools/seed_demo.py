@@ -20,9 +20,10 @@ from app.models.enums import (
     DeviceType,
     OperatingMode,
     SignalColor,
+    TrafficDensity,
     UserRole,
 )
-from app.models.traffic import Device, Intersection, Lane, SignalState
+from app.models.traffic import Device, Intersection, Lane, SignalState, TrafficReading
 from app.models.user import User
 from app.security.passwords import hash_password, verify_password
 
@@ -35,6 +36,18 @@ DEMO_LANE_IDS = {
     "west": uuid.UUID("00000000-0000-0000-0000-000000000104"),
 }
 DEMO_DEVICE_ID = uuid.UUID("00000000-0000-0000-0000-000000000201")
+DEMO_TRAFFIC_READING_IDS = {
+    "north": uuid.UUID("00000000-0000-0000-0000-000000000301"),
+    "south": uuid.UUID("00000000-0000-0000-0000-000000000302"),
+    "east": uuid.UUID("00000000-0000-0000-0000-000000000303"),
+    "west": uuid.UUID("00000000-0000-0000-0000-000000000304"),
+}
+DEMO_TRAFFIC_READINGS = {
+    "north": {"vehicle_count": 4, "density": TrafficDensity.LOW},
+    "south": {"vehicle_count": 3, "density": TrafficDensity.LOW},
+    "east": {"vehicle_count": 7, "density": TrafficDensity.MEDIUM},
+    "west": {"vehicle_count": 5, "density": TrafficDensity.MEDIUM},
+}
 
 
 @dataclass(frozen=True)
@@ -43,6 +56,7 @@ class DemoSeedConfig:
     admin_password: str
     admin_display_name: str = "Demo Admin"
     allow_production: bool = False
+    with_traffic: bool = False
 
 
 @dataclass(frozen=True)
@@ -107,6 +121,11 @@ def seed_demo(session: Session, config: DemoSeedConfig) -> DemoSeedResult:
     for direction, lane_id in DEMO_LANE_IDS.items():
         statuses[_ensure_safe_red_signal_state(session, lane_id)] += 1
 
+    if config.with_traffic:
+        for direction, lane_id in DEMO_LANE_IDS.items():
+            status = _ensure_demo_traffic_reading(session, direction, lane_id)
+            statuses[f"traffic_{status}"] += 1
+
     session.commit()
     return DemoSeedResult(
         statuses=statuses,
@@ -138,6 +157,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         admin_password=password,
         admin_display_name=args.display_name,
         allow_production=args.allow_production,
+        with_traffic=args.with_traffic,
     )
     assert_safe_environment(settings.environment, allow_production=config.allow_production)
 
@@ -154,6 +174,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--password", default=None)
     parser.add_argument("--display-name", default="Demo Admin")
     parser.add_argument("--allow-production", action="store_true")
+    parser.add_argument(
+        "--with-traffic",
+        action="store_true",
+        help="Add or refresh one recent demo traffic reading for each approach.",
+    )
     return parser.parse_args(argv)
 
 
@@ -240,6 +265,46 @@ def _ensure_safe_red_signal_state(session: Session, lane_id: uuid.UUID) -> str:
     return "updated" if changed else "existing"
 
 
+def _ensure_demo_traffic_reading(
+    session: Session,
+    direction: str,
+    lane_id: uuid.UUID,
+) -> str:
+    values = DEMO_TRAFFIC_READINGS[direction]
+    reading = session.get(TrafficReading, DEMO_TRAFFIC_READING_IDS[direction])
+    captured_at = datetime.now(UTC)
+    if reading is None:
+        session.add(
+            TrafficReading(
+                id=DEMO_TRAFFIC_READING_IDS[direction],
+                intersection_id=DEMO_INTERSECTION_ID,
+                lane_id=lane_id,
+                device_id=DEMO_DEVICE_ID,
+                vehicle_count=int(values["vehicle_count"]),
+                density=values["density"],
+                captured_at=captured_at,
+            )
+        )
+        return "created"
+
+    changed = False
+    updates = {
+        "intersection_id": DEMO_INTERSECTION_ID,
+        "lane_id": lane_id,
+        "device_id": DEMO_DEVICE_ID,
+        "vehicle_count": int(values["vehicle_count"]),
+        "density": values["density"],
+    }
+    for field, value in updates.items():
+        if getattr(reading, field) != value:
+            setattr(reading, field, value)
+            changed = True
+    if reading.captured_at != captured_at:
+        reading.captured_at = captured_at
+        changed = True
+    return "updated" if changed else "existing"
+
+
 def _print_result(result: DemoSeedResult, admin_email: str) -> None:
     print("Demo seed complete")
     print(f"Admin email: {admin_email}")
@@ -252,6 +317,13 @@ def _print_result(result: DemoSeedResult, admin_email: str) -> None:
         f"updated={result.statuses['updated']} "
         f"existing={result.statuses['existing']}"
     )
+    traffic_rows = (
+        result.statuses["traffic_created"]
+        + result.statuses["traffic_updated"]
+        + result.statuses["traffic_existing"]
+    )
+    if traffic_rows:
+        print(f"Demo traffic readings: {traffic_rows}")
 
 
 if __name__ == "__main__":

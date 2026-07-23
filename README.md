@@ -89,6 +89,38 @@ cd /home/itms/Desktop/intelligent-traffic-management-system/backend
 The dashboard uses `VITE_API_BASE_URL` and `VITE_WS_BASE_URL`; copy
 `web-dashboard/.env.example` to `web-dashboard/.env` for local overrides.
 
+## Dashboard Digital Twin
+
+Phase 13 adds a live 3D four-way intersection view to the existing dashboard.
+It uses the backend live intersection API and shared WebSocket stream, then
+normalizes lane, signal and traffic-reading state into north, south, east and
+west views. The scene is visual only: it does not publish MQTT commands and
+does not control GPIO.
+
+If no traffic readings exist, the intersection still renders with `No traffic
+data` and zero vehicles. For a local demo with visible backend-driven vehicle
+visuals, seed the optional demo readings from the backend folder:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed_demo --with-traffic
+```
+
+Open a digital twin after signing in:
+
+```text
+http://localhost:5173/intersections/<intersection-id>/digital-twin
+```
+
+Run dashboard checks:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/web-dashboard
+npm run typecheck
+npm test
+npm run build
+```
+
 ## Local Backend Demo Seed
 
 For local dashboard login and API testing without PostgreSQL, configure
@@ -100,7 +132,9 @@ DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed
 ```
 
 The command does not print the password and can be run repeatedly without
-duplicating lanes or signal states. It refuses production by default.
+duplicating lanes or signal states. Add `--with-traffic` to create or refresh
+one recent demo traffic reading for north, south, east and west without
+creating endless duplicate readings. It refuses production by default.
 
 Run the backend from the backend folder:
 

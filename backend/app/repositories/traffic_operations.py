@@ -94,14 +94,14 @@ def list_latest_traffic_readings(
     intersection_id: uuid.UUID,
     limit: int,
 ) -> list[TrafficReading]:
-    return list(
+    readings = list(
         db.scalars(
             select(TrafficReading)
             .where(TrafficReading.intersection_id == intersection_id)
-            .order_by(TrafficReading.captured_at.desc())
-            .limit(limit)
+            .order_by(TrafficReading.captured_at.desc(), TrafficReading.id.desc())
         )
     )
+    return _latest_per_lane(readings, "captured_at", limit=limit)
 
 
 def list_current_signal_states(
@@ -110,14 +110,14 @@ def list_current_signal_states(
     intersection_id: uuid.UUID,
     limit: int,
 ) -> list[SignalState]:
-    return list(
+    states = list(
         db.scalars(
             select(SignalState)
             .where(SignalState.intersection_id == intersection_id)
-            .order_by(SignalState.started_at.desc())
-            .limit(limit)
+            .order_by(SignalState.started_at.desc(), SignalState.id.desc())
         )
     )
+    return _latest_per_lane(states, "started_at", limit=limit)
 
 
 def list_active_incidents(
@@ -304,6 +304,41 @@ def _ensure_timezone(value: datetime | None) -> datetime | None:
     if value is not None and value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value
+
+
+def _latest_per_lane(
+    items: list[ModelT],
+    timestamp_attribute: str,
+    *,
+    limit: int,
+) -> list[ModelT]:
+    latest: dict[uuid.UUID | str, ModelT] = {}
+    for item in items:
+        lane_id = getattr(item, "lane_id", None)
+        key = lane_id if lane_id is not None else "intersection"
+        current = latest.get(key)
+        if current is None or _is_later_authoritative(item, current, timestamp_attribute):
+            latest[key] = item
+    return sorted(
+        latest.values(),
+        key=lambda item: (
+            getattr(item, timestamp_attribute),
+            str(getattr(item, "id")),
+        ),
+        reverse=True,
+    )[:limit]
+
+
+def _is_later_authoritative(
+    candidate: ModelT,
+    current: ModelT,
+    timestamp_attribute: str,
+) -> bool:
+    candidate_timestamp = getattr(candidate, timestamp_attribute)
+    current_timestamp = getattr(current, timestamp_attribute)
+    if candidate_timestamp != current_timestamp:
+        return candidate_timestamp > current_timestamp
+    return str(getattr(candidate, "id")) > str(getattr(current, "id"))
 
 
 def _paginate(

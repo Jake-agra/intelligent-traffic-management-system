@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models import Base
-from app.models.enums import OperatingMode, SignalColor, UserRole
-from app.models.traffic import Lane, SignalState
+from app.models.enums import OperatingMode, SignalColor, TrafficDensity, UserRole
+from app.models.traffic import Lane, SignalState, TrafficReading
 from app.models.user import User
 from app.security.passwords import verify_password
 from app.tools.seed_demo import (
+    DEMO_DEVICE_ID,
     DEMO_INTERSECTION_ID,
     DEMO_LANE_IDS,
     DemoSeedConfig,
@@ -70,6 +71,44 @@ def test_seed_demo_is_idempotent(demo_session: Session) -> None:
     assert second.statuses["existing"] == 11
     assert len(demo_session.scalars(select(Lane)).all()) == 4
     assert len(demo_session.scalars(select(SignalState)).all()) == 4
+
+
+def test_seed_demo_optionally_adds_demo_traffic_readings(
+    demo_session: Session,
+) -> None:
+    config = DemoSeedConfig(
+        admin_email="admin@example.com",
+        admin_password="local-secret",
+        with_traffic=True,
+    )
+
+    result = seed_demo(demo_session, config)
+    readings = demo_session.scalars(select(TrafficReading)).all()
+
+    assert result.statuses["traffic_created"] == 4
+    assert len(readings) == 4
+    assert {reading.lane_id for reading in readings} == set(DEMO_LANE_IDS.values())
+    assert {reading.device_id for reading in readings} == {DEMO_DEVICE_ID}
+    assert {reading.density for reading in readings} <= {
+        TrafficDensity.LOW,
+        TrafficDensity.MEDIUM,
+    }
+    assert {reading.vehicle_count for reading in readings} == {3, 4, 5, 7}
+
+
+def test_seed_demo_traffic_is_idempotent(
+    demo_session: Session,
+) -> None:
+    config = DemoSeedConfig(
+        admin_email="admin@example.com",
+        admin_password="local-secret",
+        with_traffic=True,
+    )
+
+    seed_demo(demo_session, config)
+    seed_demo(demo_session, config)
+
+    assert len(demo_session.scalars(select(TrafficReading)).all()) == 4
 
 
 def test_seed_demo_updates_admin_password_without_printing_or_storing_plaintext(

@@ -11,6 +11,7 @@ Implemented pages:
 - Overview
 - Intersections
 - Intersection detail
+- Intersection digital twin
 - Incidents
 - Violations
 - Alerts
@@ -139,6 +140,62 @@ Flow:
 Web dashboard -> FastAPI authenticated API -> backend validation -> MQTT ->
 Raspberry Pi edge service -> GPIO traffic lights.
 
+## Digital Twin
+
+Phase 13 adds a protected digital twin route:
+
+```text
+/intersections/:intersectionId/digital-twin
+```
+
+Open it from the `Digital Twin` action on an intersection detail page. The
+digital twin loads the existing live endpoint and reuses the dashboard
+WebSocket provider; it does not create a second WebSocket connection.
+
+The page shows:
+
+- north, south, east and west lane mapping
+- current signal colour per direction
+- aggregate traffic density and vehicle count per direction
+- API status, WebSocket status and last update time
+- stale-data warnings
+- a Three.js scene with roads, markings, traffic lights and simple
+  bounded vehicle visuals
+- a textual fallback that remains available without WebGL
+
+Vehicles are derived from aggregate backend traffic readings. They are not
+measured vehicle tracks. When no traffic readings exist, the page shows
+`No traffic data` and zero vehicles while keeping the road intersection and
+traffic lights visible.
+
+On Raspberry Pi desktop displays around `1366x768`, the Digital Twin uses a
+compact two-column layout with the canvas on the left and an independently
+scrollable status panel on the right. Mobile layouts continue to stack.
+
+To verify signal updates:
+
+1. Start the backend and dashboard.
+2. Sign in and open an intersection detail page.
+3. Open `Digital Twin`.
+4. Trigger a backend signal update through the existing signal override flow or
+   MQTT hardware path.
+5. Confirm the signal colour changes in both the status panel and scene after
+   the `signal.updated` event refreshes live state.
+
+To verify traffic density updates, publish or seed a traffic reading through
+the existing backend/MQTT path and confirm the corresponding direction's
+density and illustrative vehicle count refresh after `traffic.updated`.
+
+For local demo traffic, use the explicit opt-in seed option:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed_demo --with-traffic
+```
+
+Repeated runs update the four deterministic demo traffic rows instead of
+creating endless duplicates. Production startup behavior is unchanged.
+
 ## Demo Login Procedure
 
 Create or use a backend user with a role that can access the target page. For
@@ -148,6 +205,9 @@ local development, seed a demo admin from the backend folder:
 cd /home/itms/Desktop/intelligent-traffic-management-system/backend
 DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed_demo
 ```
+
+Add `--with-traffic` when you want the demo Digital Twin to show bounded
+backend-driven vehicles for north, south, east and west.
 
 - `admin`: full dashboard and signal controls
 - `analyst`: overview and read-only intersection pages
@@ -181,6 +241,8 @@ real credentials.
   endpoint; per-intersection signal states are shown on the detail page.
 - Signal controls depend on existing backend HTTP endpoints and their current
   validation behavior.
+- Phase 13 digital twin supports one four-way intersection at a time and uses
+  aggregate vehicle-density visualization rather than tracked positions.
 
 ## Backend Test Stability
 

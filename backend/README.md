@@ -49,6 +49,18 @@ the demo intersection, north/south/east/west lanes and safe red signal states.
 It refuses to run when `ENVIRONMENT=production` unless `--allow-production` is
 passed deliberately.
 
+To show bounded demo vehicles in the Phase 13 Digital Twin, add optional recent
+traffic readings explicitly:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+DEMO_ADMIN_PASSWORD='choose-a-local-password' .venv/bin/python -m app.tools.seed_demo --with-traffic
+```
+
+The optional traffic rows use deterministic demo IDs and update on repeated
+runs instead of creating endless duplicate readings. They are not seeded at
+application startup.
+
 ## Run
 
 ```powershell

@@ -60,3 +60,8 @@ publisher.
 
 Signal operations do not control GPIO in this phase. They update backend state,
 create `SignalEvent` history and publish `signal.updated`.
+
+The live intersection response preserves append-only signal history in the
+database, but returns one latest authoritative `current_signal_states` entry per
+lane for the current UI state. Timestamp ordering is used first; matching
+timestamps are resolved deterministically by signal-state UUID.
