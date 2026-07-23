@@ -51,6 +51,13 @@ Raspberry Pi edge-service settings:
 - `TRAFFIC_LIGHT_SOUTH_LANE_ID`
 - `TRAFFIC_LIGHT_EAST_LANE_ID`
 - `TRAFFIC_LIGHT_WEST_LANE_ID`
+- `AUTO_CONTROLLER_ENABLED`
+- `AUTO_NS_GREEN_SECONDS`
+- `AUTO_NS_YELLOW_SECONDS`
+- `AUTO_EW_GREEN_SECONDS`
+- `AUTO_EW_YELLOW_SECONDS`
+- `AUTO_ALL_RED_SECONDS`
+- `MANUAL_OVERRIDE_MAX_SECONDS`
 
 ## Topics
 
@@ -61,6 +68,8 @@ Raspberry Pi edge-service settings:
 | Device to backend | `itms/v1/intersections/{intersection_id}/traffic` |
 | Backend to device | `itms/v1/intersections/{intersection_id}/commands/signal` |
 | Device to backend | `itms/v1/intersections/{intersection_id}/commands/ack` |
+| Backend to device | `itms/v1/intersections/{intersection_id}/commands/controller-mode` |
+| Device to backend | `itms/v1/intersections/{intersection_id}/controller/status` |
 
 ## Device Heartbeat
 
@@ -151,6 +160,14 @@ intersection context, is stale, malformed or requests a duration above
   "status": "accepted",
   "message": "Command queued",
   "device_id": "uuid",
+  "requested_signal": "green",
+  "resulting_signals": {
+    "north": "green",
+    "south": "red",
+    "east": "red",
+    "west": "red"
+  },
+  "source": "gpio",
   "acknowledged_at": "timezone-aware ISO timestamp"
 }
 ```
@@ -163,19 +180,101 @@ Supported acknowledgement statuses:
 - `failed`
 - `duplicate`
 
+`requested_signal`, `resulting_signals` and `source` are optional for backward
+compatibility. They are required for confirmed physical state synchronization.
+`resulting_signals` reports application-level direction colours only; it does
+not expose raw GPIO pin numbers.
+
 Acknowledgement lifecycle:
 
 1. Valid command received by the Raspberry Pi.
-2. Edge service publishes `accepted`.
+2. Edge service publishes `accepted`; the backend treats this as in progress
+   and does not change confirmed current signal state.
 3. GPIO safe transition and requested state are applied.
-4. Edge service publishes `executed`.
+4. Edge service publishes `executed` with `resulting_signals`; the backend
+   persists confirmed `SignalState` rows, appends `SignalEvent` history for
+   changed lanes and publishes `signal.updated`.
 5. Timed hold expires and the edge service returns to all red.
+6. Edge service publishes another `executed` report with `source` set to
+   `timed_restoration` and all directions red.
 
 If validation fails, the service publishes `rejected`. If the command ID was
 already processed, it publishes `duplicate` and does not execute GPIO again. If
 GPIO execution fails, it publishes `failed`.
 
-The backend validates the acknowledgement and publishes `signal.updated`.
+`rejected`, `failed` and `duplicate` acknowledgements do not change confirmed
+signal state. Duplicate acknowledgements do not create duplicate `SignalState`
+or `SignalEvent` records.
+
+On startup the Raspberry Pi sets GPIO to all red and publishes an `executed`
+state report with `source=startup`. After MQTT reconnect it publishes the same
+current-state report with `source=reconnect`. The backend validates device and
+intersection IDs, rejects stale reports and only appends history when the
+reported state differs from the latest confirmed state.
+
+## Controller Mode Command
+
+Phase 13.2 adds explicit controller modes:
+
+- `automatic`
+- `manual`
+- `failsafe`
+
+Backend mode commands are typed MQTT payloads:
+
+```json
+{
+  "command_id": "uuid",
+  "intersection_id": "uuid",
+  "mode": "manual",
+  "reason": "operator requested manual control",
+  "issued_at": "timezone-aware ISO timestamp"
+}
+```
+
+The Raspberry Pi validates the intersection and staleness, publishes
+`accepted`, serializes any active automatic/manual operation, transitions GPIO
+through all red, then publishes `executed` only after the requested mode is
+confirmed. Manual signal commands are rejected until manual mode is confirmed.
+
+## Controller Status
+
+```json
+{
+  "command_id": "uuid",
+  "intersection_id": "uuid",
+  "status": "executed",
+  "mode": "automatic",
+  "message": "Automatic phase north_south_green.",
+  "device_id": "uuid",
+  "phase": "north_south_green",
+  "phase_started_at": "timezone-aware ISO timestamp",
+  "phase_duration_seconds": 15,
+  "next_phase": "north_south_yellow",
+  "source": "automatic_phase",
+  "acknowledged_at": "timezone-aware ISO timestamp"
+}
+```
+
+The backend persists one current `ControllerState` per intersection and publishes
+`controller.mode_updated`. `accepted` keeps the mode change pending; `executed`
+becomes the confirmed mode/phase; `failed` or `rejected` preserve the prior
+confirmed mode. GPIO pin numbers are never published.
+
+## Fixed-Time Automatic Cycle
+
+When `AUTO_CONTROLLER_ENABLED=true`, the Pi repeats this local GPIO sequence:
+
+1. `all_red_before_ns`
+2. `north_south_green`
+3. `north_south_yellow`
+4. `all_red_before_ew`
+5. `east_west_green`
+6. `east_west_yellow`
+
+Every phase defines the complete north/south/east/west output state and is
+reported after GPIO execution. The backend and Digital Twin update only from
+confirmed reports.
 
 ## Hardware Signal Test Tool
 

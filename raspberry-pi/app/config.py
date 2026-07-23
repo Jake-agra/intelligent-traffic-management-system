@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     command_max_age_seconds: int = Field(default=300, gt=0)
     signal_command_max_duration_seconds: int = Field(default=60, gt=0)
     signal_all_red_transition_seconds: float = Field(default=0.2, ge=0)
+    auto_controller_enabled: bool = True
+    auto_ns_green_seconds: float = Field(default=15, gt=0)
+    auto_ns_yellow_seconds: float = Field(default=3, gt=0)
+    auto_ew_green_seconds: float = Field(default=15, gt=0)
+    auto_ew_yellow_seconds: float = Field(default=3, gt=0)
+    auto_all_red_seconds: float = Field(default=2, gt=0)
+    manual_override_max_seconds: int = Field(default=60, gt=0)
     gpio_enabled: bool = False
     traffic_light_north_lane_id: str | None = None
     traffic_light_south_lane_id: str | None = None

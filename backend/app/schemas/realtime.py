@@ -14,6 +14,7 @@ class RealtimeEventName(str, Enum):
     ALERT_CREATED = "alert.created"
     ALERT_ACKNOWLEDGED = "alert.acknowledged"
     DEVICE_STATUS_CHANGED = "device.status_changed"
+    CONTROLLER_MODE_UPDATED = "controller.mode_updated"
 
 
 class RealtimeBaseModel(BaseModel):

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_active_user, get_db_session, require_roles
@@ -60,15 +60,18 @@ async def get_intersection_live_state(
 async def change_signal_mode(
     intersection_id: uuid.UUID,
     request: SignalModeRequest,
+    http_request: Request,
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
     db: Session = Depends(get_db_session),
 ) -> SignalModeResponse:
+    mqtt_service = getattr(http_request.app.state, "mqtt_service", None)
     return await operations.change_signal_mode(
         db,
         intersection_id=intersection_id,
         mode=request.mode,
         reason=request.reason,
         user=current_user,
+        mqtt_service=mqtt_service,
     )
 
 
@@ -76,9 +79,11 @@ async def change_signal_mode(
 async def override_signal(
     intersection_id: uuid.UUID,
     request: SignalOverrideRequest,
+    http_request: Request,
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
     db: Session = Depends(get_db_session),
 ) -> SignalOverrideResponse:
+    mqtt_service = getattr(http_request.app.state, "mqtt_service", None)
     return await operations.override_signal(
         db,
         intersection_id=intersection_id,
@@ -87,4 +92,5 @@ async def override_signal(
         duration_seconds=request.duration_seconds,
         reason=request.reason,
         user=current_user,
+        mqtt_service=mqtt_service,
     )

@@ -97,6 +97,20 @@ normalizes lane, signal and traffic-reading state into north, south, east and
 west views. The scene is visual only: it does not publish MQTT commands and
 does not control GPIO.
 
+Phase 13.1 synchronizes the Digital Twin to confirmed Raspberry Pi GPIO state.
+When MQTT hardware execution is enabled, dashboard signal overrides are
+requested commands until the Pi publishes an `executed` acknowledgement with
+the resulting north/south/east/west state. The backend then records confirmed
+`SignalState` history and broadcasts the existing `signal.updated` event.
+
+Phase 13.2 adds a fixed-time automatic intersection controller on the Raspberry
+Pi. The Pi starts GPIO all red, reports confirmed state to the backend, then
+cycles all red -> north/south green -> north/south yellow -> all red ->
+east/west green -> east/west yellow -> repeat when automatic mode is confirmed.
+Authorized dashboard operators can switch to manual mode, issue bounded manual
+overrides, resume automatic mode from all red, or trigger emergency all red.
+The browser still never publishes MQTT directly.
+
 If no traffic readings exist, the intersection still renders with `No traffic
 data` and zero vehicles. For a local demo with visible backend-driven vehicle
 visuals, seed the optional demo readings from the backend folder:

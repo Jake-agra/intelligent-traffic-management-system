@@ -12,10 +12,12 @@ const signalTones: Record<TwinSignal, "neutral" | "good" | "warning" | "danger">
 
 export function DigitalTwinStatusPanel({
   model,
-  backTo
+  backTo,
+  commandStatus
 }: {
   model: DigitalTwinViewModel;
   backTo: string;
+  commandStatus?: string | null;
 }) {
   return (
     <aside className="digital-twin-status" aria-label="Digital twin textual state">
@@ -43,10 +45,23 @@ export function DigitalTwinStatusPanel({
             <dt>Stale data</dt>
             <dd>{model.isStale ? "Yes" : "No"}</dd>
           </div>
+          <div>
+            <dt>Mode</dt>
+            <dd>{model.controllerState?.mode ?? "unknown"}</dd>
+          </div>
+          <div>
+            <dt>Phase</dt>
+            <dd>{model.controllerState?.phase ?? "No confirmed phase"}</dd>
+          </div>
+          <div>
+            <dt>Mode status</dt>
+            <dd>{model.controllerState?.command_status ?? "unknown"}</dd>
+          </div>
         </dl>
         {model.staleReason ? (
           <div className="state-panel state-panel--warning">{model.staleReason}</div>
         ) : null}
+        {commandStatus ? <CommandStatusPanel status={commandStatus} /> : null}
       </div>
 
       <div className="panel">
@@ -69,8 +84,45 @@ export function DigitalTwinStatusPanel({
           ))}
         </div>
       </div>
+
+      <div className="panel">
+        <h3>Physical controller</h3>
+        <dl className="compact-list">
+          <div>
+            <dt>Online</dt>
+            <dd>{model.deviceStatusSummary.online}</dd>
+          </div>
+          <div>
+            <dt>Degraded</dt>
+            <dd>{model.deviceStatusSummary.degraded}</dd>
+          </div>
+          <div>
+            <dt>Offline</dt>
+            <dd>{model.deviceStatusSummary.offline}</dd>
+          </div>
+        </dl>
+        {model.deviceStatusSummary.offline > 0 ? (
+          <div className="state-panel state-panel--warning">
+            Physical controller offline or stale; confirmed signal state may need reconnection sync.
+          </div>
+        ) : null}
+      </div>
     </aside>
   );
+}
+
+function CommandStatusPanel({ status }: { status: string }) {
+  if (status === "accepted") {
+    return <div className="state-panel">Command accepted; waiting for physical execution.</div>;
+  }
+  if (status === "rejected" || status === "failed") {
+    return (
+      <div className="state-panel state-panel--error">
+        Command {status}; confirmed signal state was not changed.
+      </div>
+    );
+  }
+  return null;
 }
 
 function DirectionState({ state }: { state: DirectionTwinState }) {

@@ -14,10 +14,11 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.history import AuditLog, SignalEvent
-from app.models.traffic import Alert, Incident, SignalState
+from app.models.traffic import Alert, ControllerState, Incident, SignalState
 from app.models.user import User
 from app.realtime import realtime_event_publisher
 from app.repositories import operations
+from app.schemas.mqtt import ControllerModeCommandPayload, SignalCommandPayload
 from app.schemas.operations import (
     AlertActionResponse,
     IncidentActionResponse,
@@ -178,11 +179,77 @@ async def change_signal_mode(
     mode: OperatingMode,
     reason: str,
     user: User,
+    mqtt_service: object | None = None,
 ) -> SignalModeResponse:
     _require_role(user, UserRole.ADMIN)
     intersection = operations.get_intersection(db, intersection_id)
     if intersection is None:
         raise HTTPException(status_code=404, detail="Intersection not found.")
+
+    settings = get_settings()
+    if settings.mqtt_enabled and mqtt_service is not None:
+        current = operations.get_controller_state(db, intersection_id=intersection_id)
+        command = ControllerModeCommandPayload(
+            intersection_id=intersection_id,
+            mode=mode,
+            reason=reason,
+            issued_at=datetime.now(UTC),
+        )
+        audit = _audit(
+            db,
+            user=user,
+            action="controller.mode_requested",
+            resource_type="intersection",
+            resource_id=intersection_id,
+            before_state=_controller_state_dict(current),
+            after_state={
+                "command_id": str(command.command_id),
+                "requested_mode": mode.value,
+                "reason": reason,
+            },
+        )
+        if current is None:
+            current = operations.add_controller_state(
+                db,
+                ControllerState(
+                    intersection_id=intersection_id,
+                    mode=OperatingMode.MANUAL,
+                    requested_mode=mode,
+                    command_status="pending",
+                    command_id=command.command_id,
+                    reason=reason,
+                    updated_by_id=user.id,
+                ),
+            )
+        else:
+            current.requested_mode = mode
+            current.command_status = "pending"
+            current.command_id = command.command_id
+            current.reason = reason
+            current.updated_by_id = user.id
+        db.commit()
+        await mqtt_service.publish_controller_mode_command(command, user_id=user.id)
+        await _publish(
+            RealtimeEventName.CONTROLLER_MODE_UPDATED,
+            intersection_id=intersection_id,
+            data={
+                "command_id": str(command.command_id),
+                "status": "requested",
+                "mode": mode.value,
+                "reason": reason,
+                "confirmed": False,
+            },
+        )
+        return SignalModeResponse(
+            action="controller.mode_requested",
+            audit_log_id=audit.id,
+            emitted_event=RealtimeEventName.CONTROLLER_MODE_UPDATED.value,
+            intersection_id=intersection_id,
+            mode=mode,
+            reason=reason,
+            status="pending",
+            command_id=command.command_id,
+        )
 
     before_state = {"intersection_id": str(intersection_id)}
     now = datetime.now(UTC)
@@ -250,10 +317,12 @@ async def override_signal(
     duration_seconds: int,
     reason: str,
     user: User,
+    mqtt_service: object | None = None,
 ) -> SignalOverrideResponse:
     _require_role(user, UserRole.ADMIN)
     settings = get_settings()
-    if duration_seconds > settings.max_signal_override_seconds:
+    duration_limit = min(settings.max_signal_override_seconds, settings.manual_override_max_seconds)
+    if duration_seconds > duration_limit:
         raise _conflict("Signal override duration exceeds configured maximum.")
     intersection = operations.get_intersection(db, intersection_id)
     if intersection is None:
@@ -265,6 +334,14 @@ async def override_signal(
     )
     if lane is None:
         raise HTTPException(status_code=404, detail="Lane not found for intersection.")
+    if settings.mqtt_enabled and mqtt_service is not None:
+        controller_state = operations.get_controller_state(db, intersection_id=intersection_id)
+        if (
+            controller_state is None
+            or controller_state.mode != OperatingMode.MANUAL
+            or controller_state.command_status != "confirmed"
+        ):
+            raise _conflict("Manual mode must be confirmed before manual signal overrides.")
 
     latest = operations.get_latest_signal_state(
         db,
@@ -277,6 +354,56 @@ async def override_signal(
 
     now = datetime.now(UTC)
     ends_at = now + timedelta(seconds=duration_seconds)
+    if settings.mqtt_enabled and mqtt_service is not None:
+        command = SignalCommandPayload(
+            intersection_id=intersection_id,
+            lane_id=lane_id,
+            signal=requested_color,
+            duration_seconds=duration_seconds,
+            reason=reason,
+            issued_at=now,
+        )
+        audit = _audit(
+            db,
+            user=user,
+            action="signal.override_requested",
+            resource_type="lane",
+            resource_id=lane_id,
+            before_state={"color": previous_color.value},
+            after_state={
+                "command_id": str(command.command_id),
+                "requested_color": requested_color.value,
+                "duration_seconds": duration_seconds,
+                "reason": reason,
+            },
+        )
+        db.commit()
+        await mqtt_service.publish_signal_command(command, user_id=user.id)
+        await _publish(
+            RealtimeEventName.SIGNAL_UPDATED,
+            intersection_id=intersection_id,
+            data={
+                "command_id": str(command.command_id),
+                "lane_id": str(lane_id),
+                "status": "requested",
+                "requested_signal": requested_color.value,
+                "duration_seconds": duration_seconds,
+            },
+        )
+        return SignalOverrideResponse(
+            action="signal.override_requested",
+            audit_log_id=audit.id,
+            emitted_event=RealtimeEventName.SIGNAL_UPDATED.value,
+            intersection_id=intersection_id,
+            lane_id=lane_id,
+            color=requested_color,
+            duration_seconds=duration_seconds,
+            started_at=now,
+            ends_at=ends_at,
+            signal_event_id=None,
+            command_id=command.command_id,
+        )
+
     signal_state = operations.add_signal_state(
         db,
         SignalState(
@@ -414,6 +541,19 @@ def _incident_state(incident: Incident) -> dict[str, object]:
     return {
         "status": incident.status.value,
         "resolved_at": incident.resolved_at.isoformat() if incident.resolved_at else None,
+    }
+
+
+def _controller_state_dict(state: object | None) -> dict[str, object] | None:
+    if state is None:
+        return None
+    return {
+        "mode": getattr(state, "mode").value if getattr(state, "mode", None) else None,
+        "requested_mode": getattr(state, "requested_mode").value
+        if getattr(state, "requested_mode", None)
+        else None,
+        "command_status": getattr(state, "command_status", None),
+        "phase": getattr(state, "phase", None),
     }
 
 

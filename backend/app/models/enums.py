@@ -31,6 +31,7 @@ class SignalColor(str, Enum):
 class OperatingMode(str, Enum):
     AUTOMATIC = "automatic"
     MANUAL = "manual"
+    FAILSAFE = "failsafe"
 
 
 class DeviceType(str, Enum):
@@ -70,3 +71,4 @@ class SignalEventSource(str, Enum):
     MANUAL = "manual"
     EMERGENCY = "emergency"
     SIMULATION = "simulation"
+    PHYSICAL = "physical"

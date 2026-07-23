@@ -140,6 +140,19 @@ Flow:
 Web dashboard -> FastAPI authenticated API -> backend validation -> MQTT ->
 Raspberry Pi edge service -> GPIO traffic lights.
 
+When MQTT hardware execution is enabled, an override request is a requested
+command only. The backend publishes the typed MQTT command and waits for the
+Raspberry Pi `executed` acknowledgement before changing confirmed
+`SignalState`. `accepted` appears as pending. `rejected` or `failed` appears as
+an error status and leaves the confirmed signal display unchanged.
+
+Phase 13.2 adds controller mode controls to the same panel. Admins can switch
+to manual mode, resume automatic mode, or trigger emergency all red. Manual
+signal override fields are hidden while automatic mode is confirmed and appear
+only after the Raspberry Pi confirms manual mode through the backend live API.
+Mode changes require confirmation and are displayed as pending until the Pi
+publishes confirmed controller status.
+
 ## Digital Twin
 
 Phase 13 adds a protected digital twin route:
@@ -167,6 +180,16 @@ Vehicles are derived from aggregate backend traffic readings. They are not
 measured vehicle tracks. When no traffic readings exist, the page shows
 `No traffic data` and zero vehicles while keeping the road intersection and
 traffic lights visible.
+
+The Digital Twin and intersection detail page both use the shared WebSocket
+provider. `signal.updated` with `accepted` shows a pending command. The pages
+refresh the live API after signal updates, so `executed` acknowledgements,
+startup reports, reconnect reports and timed all-red restoration all converge
+back to the backend-confirmed physical state.
+
+`controller.mode_updated` refreshes the same pages with current mode, automatic
+phase, phase duration and next phase where available. The browser displays this
+state but never runs the timing loop itself.
 
 On Raspberry Pi desktop displays around `1366x768`, the Digital Twin uses a
 compact two-column layout with the canvas on the left and an independently
@@ -230,8 +253,11 @@ real credentials.
 5. Select an intersection.
 6. In `Signal override`, choose a lane, signal colour, duration and reason.
 7. Confirm the hardware warning.
-8. Verify the success message includes an operation ID.
-9. Watch for `signal.updated` WebSocket refresh on the page.
+8. Verify the success message includes a command ID or operation ID.
+9. Watch for pending status after `accepted`.
+10. Confirm the signal colour changes only after `executed`.
+11. Wait for duration expiry and confirm the page returns to all red with the
+    physical modules.
 
 ## Known Limitations
 

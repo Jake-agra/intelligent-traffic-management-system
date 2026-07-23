@@ -53,6 +53,10 @@ export function DigitalTwinPage() {
     }),
     [id, live.data?.current_signal_states.length, model]
   );
+  const commandStatus = useMemo(
+    () => signalCommandStatus(realtime.lastEvent, id),
+    [id, realtime.lastEvent]
+  );
 
   if (!id) {
     return <ErrorState error={new Error("Intersection ID is missing.")} />;
@@ -82,8 +86,25 @@ export function DigitalTwinPage() {
 
       <section className="digital-twin-layout digital-twin-layout--pi-desktop">
         <IntersectionScene model={model} diagnostics={sceneDiagnostics} />
-        <DigitalTwinStatusPanel model={model} backTo={`/intersections/${id}`} />
+        <DigitalTwinStatusPanel
+          model={model}
+          backTo={`/intersections/${id}`}
+          commandStatus={commandStatus}
+        />
       </section>
     </div>
   );
+}
+
+function signalCommandStatus(
+  event: { event: string; intersection_id: string | null; data: Record<string, unknown> } | null,
+  intersectionId: string | undefined,
+): string | null {
+  if (!event || !intersectionId || event.event !== "signal.updated") {
+    return null;
+  }
+  if (event.intersection_id !== intersectionId) {
+    return null;
+  }
+  return typeof event.data.status === "string" ? event.data.status : null;
 }

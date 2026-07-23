@@ -176,15 +176,49 @@ Command flow:
    staleness, duplicate command ID and duration limit.
 3. Valid commands publish `accepted`.
 4. GPIO executes through `IntersectionController`.
-5. Successful GPIO execution publishes `executed`.
+5. Successful GPIO execution publishes `executed` with the full
+   north/south/east/west physical state.
 6. The command holds for `duration_seconds` asynchronously.
-7. Expiration returns the intersection to all red.
+7. Expiration returns the intersection to all red and publishes another
+   `executed` state report with `source=timed_restoration`.
 
 Right-of-way changes between north/south and east/west pass through all red for
 `SIGNAL_ALL_RED_TRANSITION_SECONDS`. Duplicate command IDs publish `duplicate`
 and do not run GPIO again. GPIO exceptions publish `failed`.
 
-Startup safe state is all red. Shutdown safe state is all outputs off.
+Startup safe state is all red and is reported to the backend after MQTT
+connect. MQTT reconnect also reports the current physical state. Shutdown safe
+state is all outputs off; this is treated as a hardware/offline safety state,
+not as a green or red right-of-way.
+
+The current executor applies the requested lane module plus safe opposite-axis
+red modules. It does not invent a paired green for the same axis unless the GPIO
+controller actually applies that grouped phase. The backend records the
+reported physical state, not merely the originally requested lane.
+
+## Automatic Fixed-Time Control
+
+Phase 13.2 adds local Raspberry Pi automatic GPIO control. With
+`AUTO_CONTROLLER_ENABLED=true`, the edge service initializes all four modules to
+red, publishes confirmed startup state, then repeats:
+
+1. `all_red_before_ns`
+2. north/south green, east/west red
+3. north/south yellow, east/west red
+4. `all_red_before_ew`
+5. east/west green, north/south red
+6. east/west yellow, north/south red
+
+The Pi publishes a full confirmed physical state after each phase. The backend
+persists that state and the Digital Twin refreshes from backend-confirmed data.
+If MQTT disconnects, GPIO cycling continues locally; on reconnect the Pi
+publishes current GPIO state and controller mode/phase.
+
+Manual mode pauses automatic advancement, confirms all red, and then accepts
+bounded manual signal commands. Manual command expiry returns to all red and
+stays in manual mode until an operator resumes automatic mode. Emergency all
+red interrupts automatic or manual control and requires an explicit operator
+action to resume automatic cycling.
 
 ## Broker-To-Hardware Test Procedure
 
@@ -245,6 +279,54 @@ cd backend
 Expected acknowledgements are `accepted` followed by `executed` for each
 generated command ID. Rejected, failed, duplicate, malformed or timed-out
 acknowledgements are test failures.
+
+## Dashboard Synchronization Test
+
+Do not perform this test until one-direction GPIO tests and the grouped
+sequence pass.
+
+1. Start Mosquitto:
+
+```bash
+sudo systemctl start mosquitto
+```
+
+2. Start the backend:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+.venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+3. Start the Raspberry Pi edge service:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/raspberry-pi
+. .venv-gpio/bin/activate
+python -m app.main
+```
+
+4. Start the dashboard:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/web-dashboard
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+5. Open the Digital Twin for the configured intersection.
+6. From the dashboard signal override, send north green.
+7. Confirm the physical north module turns green and east/west remain red.
+8. Confirm the Digital Twin changes only after the `executed` acknowledgement.
+9. Wait for duration expiry.
+10. Confirm physical lights return to all red.
+11. Confirm the Digital Twin returns to all red after the restoration report.
+12. Repeat for east green.
+13. Run emergency all-red from the backend if needed:
+
+```bash
+cd /home/itms/Desktop/intelligent-traffic-management-system/backend
+.venv/bin/python -m app.tools.hardware_signal_test --all-red --yes
+```
 
 ## Rollback Procedure
 

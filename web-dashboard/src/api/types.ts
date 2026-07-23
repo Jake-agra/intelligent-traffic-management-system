@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "police" | "analyst" | "emergency_responder";
 export type SignalColor = "red" | "yellow" | "green";
-export type OperatingMode = "automatic" | "manual";
+export type OperatingMode = "automatic" | "manual" | "failsafe";
 export type DeviceStatus = "online" | "offline" | "degraded";
 export type AlertStatus = "open" | "acknowledged" | "resolved";
 export type AlertSeverity = "info" | "warning" | "critical";
@@ -86,6 +86,26 @@ export interface SignalState {
   ends_at: string | null;
 }
 
+export interface ControllerState {
+  id: string;
+  intersection_id: string;
+  device_id: string | null;
+  mode: OperatingMode;
+  requested_mode: OperatingMode | null;
+  command_status: string;
+  command_id: string | null;
+  phase: string | null;
+  phase_started_at: string | null;
+  phase_duration_seconds: number | null;
+  next_phase: string | null;
+  reason: string | null;
+  message: string | null;
+  confirmed_at: string | null;
+  updated_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Alert {
   id: string;
   intersection_id: string;
@@ -142,6 +162,7 @@ export interface IntersectionLiveState {
   recent_violations: Violation[];
   active_alerts: Alert[];
   devices: DeviceHealth[];
+  controller_state: ControllerState | null;
   generated_at: string;
 }
 
@@ -163,6 +184,8 @@ export interface SignalModeResponse {
   intersection_id: string;
   mode: OperatingMode;
   reason: string;
+  status: string;
+  command_id: string | null;
 }
 
 export interface SignalOverrideResponse {
@@ -175,7 +198,8 @@ export interface SignalOverrideResponse {
   duration_seconds: number;
   started_at: string;
   ends_at: string;
-  signal_event_id: string;
+  signal_event_id: string | null;
+  command_id: string | null;
 }
 
 export type RealtimeEventName =
@@ -186,7 +210,8 @@ export type RealtimeEventName =
   | "incident.updated"
   | "alert.created"
   | "alert.acknowledged"
-  | "device.status_changed";
+  | "device.status_changed"
+  | "controller.mode_updated";
 
 export interface RealtimeEventEnvelope {
   event: RealtimeEventName;

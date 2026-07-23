@@ -1,12 +1,15 @@
 from collections.abc import Awaitable, Callable
 import asyncio
+import logging
 import ssl
+import threading
 from typing import Protocol
 
 from app.core.config import Settings
 
 
 MessageHandler = Callable[[str, bytes], Awaitable[None]]
+logger = logging.getLogger(__name__)
 
 
 class MQTTClientProtocol(Protocol):
@@ -87,8 +90,11 @@ class PahoMQTTClient:
         await asyncio.wait_for(self._connected, timeout=10)
 
     async def disconnect(self) -> None:
-        await asyncio.to_thread(self._client.disconnect)
-        self._client.loop_stop()
+        timeout = self._settings.mqtt_disconnect_timeout_seconds
+        if not _call_with_timeout(self._client.disconnect, timeout):
+            logger.warning("Timed out while disconnecting MQTT client.")
+        if not _call_with_timeout(self._client.loop_stop, timeout):
+            logger.warning("Timed out while stopping MQTT network loop.")
 
     async def subscribe(self, topic: str) -> None:
         await asyncio.to_thread(self._client.subscribe, topic)
@@ -127,3 +133,10 @@ class PahoMQTTClient:
         topic = getattr(message, "topic")
         payload = getattr(message, "payload")
         asyncio.run_coroutine_threadsafe(self._handler(topic, payload), self._event_loop)
+
+
+def _call_with_timeout(callback: Callable[[], object], timeout_seconds: float) -> bool:
+    thread = threading.Thread(target=callback, daemon=True)
+    thread.start()
+    thread.join(timeout_seconds)
+    return not thread.is_alive()

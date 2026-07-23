@@ -16,6 +16,7 @@ def test_model_metadata_can_create_all_tables() -> None:
     inspector = inspect(engine)
     assert set(inspector.get_table_names()) == {
         "alerts",
+        "controller_states",
         "devices",
         "device_events",
         "incidents",

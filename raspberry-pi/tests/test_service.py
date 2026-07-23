@@ -1,4 +1,5 @@
 import asyncio
+import json
 import uuid
 
 from app.config import Settings
@@ -31,7 +32,8 @@ def test_graceful_shutdown_path() -> None:
 
     assert mqtt_client.connected is False
     assert mqtt_client.subscriptions == [
-        f"itms/v1/intersections/{settings.intersection_id}/commands/signal"
+        f"itms/v1/intersections/{settings.intersection_id}/commands/signal",
+        f"itms/v1/intersections/{settings.intersection_id}/commands/controller-mode",
     ]
     assert all(value == gpio.LOW for value in gpio.pin_values.values())
 
@@ -68,6 +70,51 @@ def test_safe_shutdown_sets_all_outputs_off() -> None:
     assert all(value == gpio.LOW for value in gpio.pin_values.values())
 
 
+def test_startup_publishes_all_red_state_report() -> None:
+    settings = _settings()
+    mqtt_client = FakeMQTTClient()
+    controller = IntersectionController(IntersectionPins.from_settings(settings), FakeGPIOAdapter())
+    service = EdgeService(
+        settings=settings,
+        mqtt_client=mqtt_client,
+        telemetry_provider=StaticTelemetryProvider(settings),
+        intersection_controller=controller,
+    )
+
+    asyncio.run(_start_and_stop(service))
+
+    report = _published_state_reports(mqtt_client)[0]
+    assert report["source"] == "startup"
+    assert report["resulting_signals"] == {
+        "north": "red",
+        "south": "red",
+        "east": "red",
+        "west": "red",
+    }
+
+
+def test_reconnect_publishes_current_state_report() -> None:
+    settings = _settings()
+    mqtt_client = FakeMQTTClient()
+    controller = IntersectionController(IntersectionPins.from_settings(settings), FakeGPIOAdapter())
+    service = EdgeService(
+        settings=settings,
+        mqtt_client=mqtt_client,
+        telemetry_provider=StaticTelemetryProvider(settings),
+        intersection_controller=controller,
+    )
+
+    async def run() -> None:
+        await service.start()
+        await service.publish_reconnect_state()
+        await service.stop()
+
+    asyncio.run(run())
+
+    reports = _published_state_reports(mqtt_client)
+    assert [report["source"] for report in reports[:2]] == ["startup", "reconnect"]
+
+
 async def _start_and_stop(service: EdgeService) -> None:
     await service.start()
     await service.stop()
@@ -99,3 +146,11 @@ def _settings() -> Settings:
         traffic_light_west_lane_id=str(uuid.uuid4()),
         _env_file=None,
     )
+
+
+def _published_state_reports(mqtt_client: FakeMQTTClient) -> list[dict[str, object]]:
+    reports: list[dict[str, object]] = []
+    for topic, payload in mqtt_client.published:
+        if topic.endswith("/commands/ack"):
+            reports.append(json.loads(payload))
+    return reports

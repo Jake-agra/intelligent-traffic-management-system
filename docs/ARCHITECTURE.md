@@ -88,6 +88,32 @@ all-red transition, active timed commands can be replaced by newer accepted
 commands and timed holds expire back to all red. Startup initializes the
 intersection to all red and shutdown turns all outputs off.
 
+Phase 13.1 synchronizes physical GPIO state back into backend state. When MQTT
+is enabled, dashboard signal overrides publish typed MQTT commands and are
+recorded as requested, not confirmed. The backend only updates confirmed
+`SignalState` rows after a Raspberry Pi `executed` acknowledgement includes the
+full north/south/east/west resulting state. `accepted` is pending-only;
+`rejected`, `failed` and `duplicate` preserve the previous confirmed state.
+Timed restoration, startup and MQTT reconnect publish the same physical state
+report so the Digital Twin can recover from disconnection by using the live API
+and shared `signal.updated` events.
+
+Phase 13.2 adds fixed-time automatic control while preserving backend
+coordination and edge GPIO authority. The Raspberry Pi owns physical phase
+execution through an `AutomaticSignalController` and `ControlModeManager`.
+The backend owns operator authorization, mode-command publication, controller
+state persistence and realtime events. Automatic/manual/failsafe mode is
+reported through typed MQTT controller status messages and exposed through the
+live intersection API. Dashboard and Digital Twin displays update from
+confirmed `signal.updated` and `controller.mode_updated` events only.
+
+Automatic operation repeats all red, north/south green, north/south yellow, all
+red, east/west green, east/west yellow. Switching to manual cancels automatic
+advancement and confirms all red before manual overrides are accepted.
+Resuming automatic cancels manual timers, confirms all red and restarts from the
+deterministic `all_red_before_ns` phase. If a critical controller error occurs,
+the Pi enters `failsafe` and attempts all red without flashing behavior.
+
 ## Production-style web dashboard
 
 Phase 12 introduces `web-dashboard/`, a React + TypeScript operations dashboard
@@ -124,6 +150,34 @@ fake websocket objects, while MQTT tests use fake clients and no network.
 The local demo seed command creates or updates a demo admin user, deterministic
 four-way intersection lane IDs and safe red signal states. It is guarded against
 accidental production execution.
+
+## Dashboard digital twin
+
+Phase 13 adds a live 3D digital twin page to the existing web dashboard at:
+
+```text
+/intersections/{intersection_id}/digital-twin
+```
+
+The page consumes `GET /api/v1/intersections/{intersection_id}/live` and the
+existing shared WebSocket provider. It normalizes backend lanes, signal states
+and traffic readings into a stable north/south/east/west view model before
+passing state into a direct Three.js rendering component.
+
+Relevant realtime events trigger a fresh backend live-state read rather than
+making the browser authoritative. The 3D scene displays signal colours, lane
+markings, traffic-light assemblies and bounded illustrative vehicles. It never
+publishes MQTT, never sends GPIO commands and does not contain signal-control
+buttons.
+
+The displayed signal colours represent the latest backend-confirmed physical
+state when a Raspberry Pi controller is assigned. Pending accepted commands and
+failed/rejected commands are shown as status messages without changing the
+authoritative colour display.
+
+The textual state panel remains available beside the canvas and when WebGL
+fails. Vehicle movement is an aggregate density visualization, not measured
+vehicle tracking.
 
 ## Document traceability
 

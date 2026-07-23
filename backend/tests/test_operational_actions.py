@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 import uuid
 
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,7 +15,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.history import AuditLog, SignalEvent
-from app.models.traffic import Alert, Incident, Intersection, Lane, SignalState
+from app.models.traffic import Alert, ControllerState, Incident, Intersection, Lane, SignalState
 from app.realtime import websocket_manager
 from app.schemas.realtime import RealtimeEventName
 from tests.conftest import auth_headers_for, create_test_user
@@ -168,6 +169,48 @@ def test_admin_signal_mode_change(
     assert response.json()["mode"] == OperatingMode.MANUAL.value
 
 
+def test_signal_mode_with_mqtt_publishes_controller_command_and_marks_pending(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _create_context(db_session)
+    user = create_test_user(db_session, email="mqtt-mode-admin@example.com", role=UserRole.ADMIN)
+    fake_mqtt = FakeMQTTService()
+    monkeypatch.setattr(
+        "app.services.operations.get_settings",
+        lambda: type(
+            "Settings",
+            (),
+            {
+                "max_signal_override_seconds": 180,
+                "manual_override_max_seconds": 60,
+                "mqtt_enabled": True,
+            },
+        )(),
+    )
+    client.app.state.mqtt_service = fake_mqtt
+
+    try:
+        response = client.post(
+            f"/api/v1/intersections/{context['intersection'].id}/signal-mode",
+            json={"mode": "automatic", "reason": "Resume fixed cycle"},
+            headers=auth_headers_for(user),
+        )
+    finally:
+        del client.app.state.mqtt_service
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["command_id"]
+    assert len(fake_mqtt.mode_commands) == 1
+    state = db_session.scalar(select(ControllerState))
+    assert state is not None
+    assert state.requested_mode == OperatingMode.AUTOMATIC
+    assert state.command_status == "pending"
+
+
 def test_admin_signal_override(
     client: TestClient,
     db_session: Session,
@@ -190,6 +233,62 @@ def test_admin_signal_override(
     body = response.json()
     assert body["color"] == SignalColor.GREEN.value
     assert body["signal_event_id"]
+
+
+def test_admin_signal_override_with_mqtt_publishes_command_without_confirmed_state(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _create_context(db_session, initial_signal=SignalColor.RED)
+    user = create_test_user(db_session, email="mqtt-override-admin@example.com", role=UserRole.ADMIN)
+    db_session.add(
+        ControllerState(
+            intersection_id=context["intersection"].id,
+            mode=OperatingMode.MANUAL,
+            command_status="confirmed",
+        )
+    )
+    db_session.commit()
+    fake_mqtt = FakeMQTTService()
+    monkeypatch.setattr(
+        "app.services.operations.get_settings",
+        lambda: type(
+            "Settings",
+            (),
+            {
+                "max_signal_override_seconds": 180,
+                "manual_override_max_seconds": 60,
+                "mqtt_enabled": True,
+            },
+        )(),
+    )
+    client.app.state.mqtt_service = fake_mqtt
+
+    try:
+        response = client.post(
+            f"/api/v1/intersections/{context['intersection'].id}/signal-override",
+            json={
+                "lane_id": str(context["lane"].id),
+                "requested_color": "green",
+                "duration_seconds": 30,
+                "reason": "Publish to physical controller",
+            },
+            headers=auth_headers_for(user),
+        )
+    finally:
+        del client.app.state.mqtt_service
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["command_id"]
+    assert body["signal_event_id"] is None
+    assert len(fake_mqtt.commands) == 1
+    assert fake_mqtt.commands[0].signal == SignalColor.GREEN
+    assert fake_mqtt.user_ids == [user.id]
+    states = db_session.scalars(select(SignalState)).all()
+    assert len(states) == 1
+    assert states[0].color == SignalColor.RED
 
 
 def test_invalid_lane(
@@ -350,6 +449,26 @@ class FakeWebSocket:
 
     async def send_json(self, message: dict[str, object]) -> None:
         self.sent.append(message)
+
+
+class FakeMQTTService:
+    def __init__(self) -> None:
+        self.commands: list[object] = []
+        self.mode_commands: list[object] = []
+        self.user_ids: list[uuid.UUID | None] = []
+
+    async def publish_signal_command(self, command: object, *, user_id: uuid.UUID | None = None) -> None:
+        self.commands.append(command)
+        self.user_ids.append(user_id)
+
+    async def publish_controller_mode_command(
+        self,
+        command: object,
+        *,
+        user_id: uuid.UUID | None = None,
+    ) -> None:
+        self.mode_commands.append(command)
+        self.user_ids.append(user_id)
 
 
 def _create_context(

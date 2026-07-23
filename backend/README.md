@@ -133,6 +133,13 @@ incident workflow updates and signal-mode or signal-override requests. Successfu
 actions create audit history and publish realtime events. Signal overrides update
 backend state only; no GPIO or device-control execution is included yet.
 
+With MQTT hardware execution enabled, Phase 13.2 treats signal mode changes as
+controller-mode commands. `POST /api/v1/intersections/{id}/signal-mode`
+publishes a typed MQTT mode command and records a pending controller state until
+the Raspberry Pi confirms `automatic`, `manual` or `failsafe` on the controller
+status topic. Manual signal overrides are accepted only after manual mode is
+confirmed and remain bounded by `MANUAL_OVERRIDE_MAX_SECONDS`.
+
 ## MQTT Foundation
 
 Phase 7 adds a lightweight MQTT service boundary for future Raspberry Pi

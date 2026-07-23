@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.history import AuditLog, SignalEvent
-from app.models.traffic import Alert, Incident, Intersection, Lane, SignalState
+from app.models.traffic import Alert, ControllerState, Incident, Intersection, Lane, SignalState
 
 
 def get_alert(db: Session, alert_id: uuid.UUID) -> Alert | None:
@@ -63,6 +63,25 @@ def list_lanes_for_intersection(
             .order_by(Lane.sequence, Lane.name)
         )
     )
+
+
+def get_controller_state(
+    db: Session,
+    *,
+    intersection_id: uuid.UUID,
+) -> ControllerState | None:
+    return db.scalar(
+        select(ControllerState).where(ControllerState.intersection_id == intersection_id)
+    )
+
+
+def add_controller_state(
+    db: Session,
+    controller_state: ControllerState,
+) -> ControllerState:
+    db.add(controller_state)
+    db.flush()
+    return controller_state
 
 
 def add_audit_log(db: Session, audit_log: AuditLog) -> AuditLog:

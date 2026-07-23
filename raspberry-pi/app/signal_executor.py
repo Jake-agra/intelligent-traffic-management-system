@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 import logging
+import uuid
 
 from app.config import Settings
 from app.mqtt_client import MQTTClientProtocol
@@ -16,6 +17,7 @@ from app.traffic_light import EAST_WEST, NORTH_SOUTH, IntersectionController
 
 
 SleepFn = Callable[[float], Awaitable[None]]
+ZERO_UUID = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
 class SignalCommandExecutor:
@@ -64,6 +66,8 @@ class SignalCommandExecutor:
                 command,
                 CommandAckStatus.EXECUTED,
                 f"Executed {command.signal.value} for {direction}.",
+                source="gpio",
+                include_state=True,
             )
             self._logger.info(
                 "Executed signal command %s: direction=%s signal=%s duration=%s",
@@ -74,6 +78,13 @@ class SignalCommandExecutor:
             )
             await self.sleep(command.duration_seconds)
             self.controller.set_all_red()
+            await self.publish_current_state(
+                source="timed_restoration",
+                command_id=command.command_id,
+                lane_id=command.lane_id,
+                requested_signal=command.signal,
+                message=f"Command {command.command_id} expired; restored all red.",
+            )
             self._logger.info("Signal command %s expired; returned to all red", command.command_id)
         except asyncio.CancelledError:
             self._logger.info("Signal command %s was replaced by a newer command", command.command_id)
@@ -132,6 +143,9 @@ class SignalCommandExecutor:
         command: SignalCommandPayload,
         status: CommandAckStatus,
         message: str,
+        *,
+        source: str | None = None,
+        include_state: bool = False,
     ) -> None:
         await self.mqtt_client.publish(
             f"itms/v1/intersections/{command.intersection_id}/commands/ack",
@@ -142,8 +156,42 @@ class SignalCommandExecutor:
                 status=status,
                 message=message,
                 device_id=self.settings.device_id,
+                requested_signal=command.signal,
+                resulting_signals=self.current_signal_state() if include_state else None,
+                source=source,
             ).model_dump_json(),
         )
+
+    async def publish_current_state(
+        self,
+        *,
+        source: str,
+        command_id: uuid.UUID | None = None,
+        lane_id: uuid.UUID | None = None,
+        requested_signal: SignalColor | None = None,
+        message: str | None = None,
+    ) -> None:
+        await self.mqtt_client.publish(
+            f"itms/v1/intersections/{self.settings.intersection_id}/commands/ack",
+            SignalCommandAckPayload(
+                command_id=command_id or ZERO_UUID,
+                intersection_id=self.settings.intersection_id,
+                lane_id=lane_id or ZERO_UUID,
+                status=CommandAckStatus.EXECUTED,
+                message=message or f"Physical signal state report: {source}.",
+                device_id=self.settings.device_id,
+                requested_signal=requested_signal,
+                resulting_signals=self.current_signal_state(),
+                source=source,
+            ).model_dump_json(),
+        )
+
+    def current_signal_state(self) -> dict[str, SignalColor]:
+        result: dict[str, SignalColor] = {}
+        for direction, light in self.controller.lights.items():
+            colour = light.active_colour or SignalColor.RED.value
+            result[direction] = SignalColor(colour)
+        return result
 
     def _clear_active_task(self, task: asyncio.Task[None]) -> None:
         if self.active_task is task:

@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 14
     max_signal_override_seconds: int = 180
+    manual_override_max_seconds: int = 60
+    auto_controller_enabled: bool = True
+    auto_ns_green_seconds: int = 15
+    auto_ns_yellow_seconds: int = 3
+    auto_ew_green_seconds: int = 15
+    auto_ew_yellow_seconds: int = 3
+    auto_all_red_seconds: int = 2
     mqtt_enabled: bool = False
     mqtt_broker_host: str = "localhost"
     mqtt_broker_port: int = 1883
@@ -26,6 +33,7 @@ class Settings(BaseSettings):
     mqtt_tls_enabled: bool = False
     mqtt_client_id: str = "itms-backend"
     mqtt_keepalive_seconds: int = 60
+    mqtt_disconnect_timeout_seconds: float = 3
     mqtt_max_telemetry_age_seconds: int = 300
     hardware_test_intersection_id: uuid.UUID | None = None
     hardware_test_north_lane_id: uuid.UUID | None = None

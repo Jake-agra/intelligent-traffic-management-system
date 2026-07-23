@@ -11,6 +11,7 @@ from app.config import Settings
 from app.mqtt_client import MQTTClientProtocol
 from app.schemas import (
     CommandAckStatus,
+    ControllerModeCommandPayload,
     SignalCommandAckPayload,
     SignalCommandPayload,
 )
@@ -26,13 +27,17 @@ class CommandHandler:
         settings: Settings,
         mqtt_client: MQTTClientProtocol,
         executor: SignalCommandExecutor | None = None,
+        mode_manager: object | None = None,
     ) -> None:
         self.settings = settings
         self.mqtt_client = mqtt_client
         self.executor = executor
+        self.mode_manager = mode_manager
         self._seen_command_ids: set[uuid.UUID] = set()
 
     async def handle_message(self, topic: str, payload: bytes) -> SignalCommandAckPayload:
+        if topic.endswith("/commands/controller-mode"):
+            return await self.handle_mode_message(payload)  # type: ignore[return-value]
         try:
             command = SignalCommandPayload.model_validate_json(payload)
             ack, direction = self._validate_command(command)
@@ -75,6 +80,17 @@ class CommandHandler:
         )
         return ack
 
+    async def handle_mode_message(self, payload: bytes) -> object:
+        try:
+            command = ControllerModeCommandPayload.model_validate_json(payload)
+        except (ValidationError, ValueError) as exc:
+            if self.mode_manager is not None:
+                logger.warning("Rejected malformed controller-mode command: %s", exc)
+            raise
+        if self.mode_manager is None:
+            raise RuntimeError("Controller mode manager is not configured.")
+        return await self.mode_manager.handle_mode_command(command)
+
     def handle_command(self, command: SignalCommandPayload) -> SignalCommandAckPayload:
         ack, _direction = self._validate_command(command)
         return ack
@@ -97,12 +113,26 @@ class CommandHandler:
         if age_seconds > self.settings.command_max_age_seconds:
             return self._ack(command, CommandAckStatus.REJECTED, "Command is stale."), ""
 
-        if command.duration_seconds > self.settings.signal_command_max_duration_seconds:
+        duration_limit = min(
+            self.settings.signal_command_max_duration_seconds,
+            self.settings.manual_override_max_seconds,
+        )
+        if command.duration_seconds > duration_limit:
             return (
                 self._ack(
                     command,
                     CommandAckStatus.REJECTED,
                     "Command duration exceeds configured maximum.",
+                ),
+                "",
+            )
+
+        if self.mode_manager is not None and not self.mode_manager.manual_confirmed:
+            return (
+                self._ack(
+                    command,
+                    CommandAckStatus.REJECTED,
+                    "Manual mode must be confirmed before manual signal commands.",
                 ),
                 "",
             )
@@ -168,6 +198,10 @@ def signal_command_topic(intersection_id: object) -> str:
 
 def signal_ack_topic(intersection_id: object) -> str:
     return f"itms/v1/intersections/{intersection_id}/commands/ack"
+
+
+def controller_mode_command_topic(intersection_id: object) -> str:
+    return f"itms/v1/intersections/{intersection_id}/commands/controller-mode"
 
 
 def _command_id_from_payload(payload: bytes) -> uuid.UUID:

@@ -37,6 +37,7 @@ export function IntersectionDetailPage() {
 
   const data = live.data;
   const currentSignalStates = latestSignalStatesForLanes(data.current_signal_states);
+  const commandStatus = signalCommandStatus(realtime.lastEvent, id);
   return (
     <div className="page-grid">
       <section className="page-header">
@@ -63,8 +64,14 @@ export function IntersectionDetailPage() {
       </section>
 
       {canControlSignals(user) ? (
-        <SignalControlPanel intersectionId={id} lanes={data.lanes} onSuccess={live.reload} />
+        <SignalControlPanel
+          intersectionId={id}
+          lanes={data.lanes}
+          controllerState={data.controller_state}
+          onSuccess={live.reload}
+        />
       ) : null}
+      {commandStatus ? <CommandStatusPanel status={commandStatus} /> : null}
 
       <section className="content-grid">
         <Panel title="Lanes">
@@ -160,6 +167,33 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 function laneName(lanes: { id: string; name: string }[], laneId: string | null): string {
   return lanes.find((lane) => lane.id === laneId)?.name ?? "Intersection";
+}
+
+function CommandStatusPanel({ status }: { status: string }) {
+  if (status === "accepted") {
+    return <div className="state-panel">Command accepted; waiting for physical execution.</div>;
+  }
+  if (status === "rejected" || status === "failed") {
+    return (
+      <div className="state-panel state-panel--error">
+        Command {status}; confirmed signal state was not changed.
+      </div>
+    );
+  }
+  return null;
+}
+
+function signalCommandStatus(
+  event: { event: string; intersection_id: string | null; data: Record<string, unknown> } | null,
+  intersectionId: string | undefined,
+): string | null {
+  if (!event || !intersectionId || event.event !== "signal.updated") {
+    return null;
+  }
+  if (event.intersection_id !== intersectionId) {
+    return null;
+  }
+  return typeof event.data.status === "string" ? event.data.status : null;
 }
 
 function latestSignalStatesForLanes(states: SignalState[]): SignalState[] {

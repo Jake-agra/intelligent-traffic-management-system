@@ -13,13 +13,24 @@ The backend remains the single source of truth. The 3D scene never publishes
 MQTT commands, never talks to Raspberry Pi GPIO directly and does not maintain
 authoritative signal state.
 
+When a physical Raspberry Pi controller is assigned, signal colours represent
+the latest confirmed physical state recorded by the backend. Requested and
+accepted commands are shown as pending status only. The Digital Twin does not
+change authoritative colours until the backend receives an `executed`
+acknowledgement or state report from the Raspberry Pi.
+
+Phase 13.2 also displays confirmed controller mode and automatic phase from the
+backend live API. Mode changes and phase updates arrive through
+`controller.mode_updated` events and trigger a live-state refresh. The scene
+does not animate or predict the next phase before physical GPIO confirmation.
+
 ## Architecture
 
 Data flow:
 
 ```text
 FastAPI live endpoint -> dashboard API client -> normalized digital-twin model
-FastAPI WebSocket -> shared RealtimeProvider -> live endpoint refresh
+FastAPI WebSocket signal.updated -> shared RealtimeProvider -> live endpoint refresh
 normalized model -> Three.js scene + textual state panel
 ```
 
@@ -57,10 +68,20 @@ live endpoint read:
 - `signal.updated`
 - `traffic.updated`
 - `device.status_changed`
+- `controller.mode_updated`
 - `incident.created`
 - `incident.updated`
 
 Duplicate event IDs are ignored before refresh.
+
+`signal.updated` may include command status. `accepted` means pending physical
+execution; `rejected` and `failed` are displayed without changing the confirmed
+signal state. `executed` means the backend has persisted the confirmed physical
+state and the refreshed live API should match the GPIO modules.
+
+`controller.mode_updated` may include `automatic`, `manual` or `failsafe`, the
+current phase, phase start timestamp, duration and next phase. The page displays
+pending mode changes separately from confirmed physical signal colours.
 
 ## Signal Mapping
 

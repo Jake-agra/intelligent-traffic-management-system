@@ -3,6 +3,7 @@ from app.models.base import Base
 from app.models.history import AuditLog, DeviceEvent, SignalEvent
 from app.models.traffic import (
     Alert,
+    ControllerState,
     Device,
     Incident,
     Intersection,
@@ -18,6 +19,7 @@ __all__ = [
     "Alert",
     "AuditLog",
     "Base",
+    "ControllerState",
     "Device",
     "DeviceEvent",
     "Incident",

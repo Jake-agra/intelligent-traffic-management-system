@@ -3,7 +3,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import DeviceStatus, SignalColor, TrafficDensity
+from app.models.enums import DeviceStatus, OperatingMode, SignalColor, TrafficDensity
 
 
 class MQTTBaseModel(BaseModel):
@@ -61,4 +61,44 @@ class SignalCommandAckPayload(MQTTBaseModel):
     status: str
     message: str | None = None
     device_id: uuid.UUID | None = None
+    requested_signal: SignalColor | None = None
+    resulting_signals: dict[str, SignalColor] | None = None
+    source: str | None = None
+    acknowledged_at: datetime
+
+    @field_validator("resulting_signals")
+    @classmethod
+    def validate_resulting_signals(
+        cls,
+        value: dict[str, SignalColor] | None,
+    ) -> dict[str, SignalColor] | None:
+        if value is None:
+            return None
+        expected = {"north", "south", "east", "west"}
+        keys = set(value)
+        if keys != expected:
+            raise ValueError("resulting_signals must include north, south, east and west.")
+        return value
+
+
+class ControllerModeCommandPayload(MQTTBaseModel):
+    command_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    intersection_id: uuid.UUID
+    mode: OperatingMode
+    reason: str
+    issued_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ControllerModeAckPayload(MQTTBaseModel):
+    command_id: uuid.UUID
+    intersection_id: uuid.UUID
+    status: str
+    mode: OperatingMode
+    message: str | None = None
+    device_id: uuid.UUID | None = None
+    phase: str | None = None
+    phase_started_at: datetime | None = None
+    phase_duration_seconds: int | None = Field(default=None, ge=0)
+    next_phase: str | None = None
+    source: str | None = None
     acknowledged_at: datetime

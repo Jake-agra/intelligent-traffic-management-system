@@ -232,6 +232,59 @@ class SignalState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     lane: Mapped[Lane | None] = relationship(back_populates="signal_states")
 
 
+class ControllerState(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "controller_states"
+    __table_args__ = (
+        UniqueConstraint("intersection_id", name="uq_controller_states_intersection_id"),
+        Index("ix_controller_states_intersection_id", "intersection_id"),
+        Index("ix_controller_states_device_id", "device_id"),
+        Index("ix_controller_states_mode", "mode"),
+    )
+
+    intersection_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("intersections.id"),
+        nullable=False,
+    )
+    device_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("devices.id"),
+    )
+    mode: Mapped[OperatingMode] = mapped_column(
+        SqlEnum(
+            OperatingMode,
+            name="operating_mode",
+            native_enum=False,
+            validate_strings=True,
+            values_callable=enum_values,
+        ),
+        default=OperatingMode.MANUAL,
+        nullable=False,
+    )
+    requested_mode: Mapped[OperatingMode | None] = mapped_column(
+        SqlEnum(
+            OperatingMode,
+            name="operating_mode",
+            native_enum=False,
+            validate_strings=True,
+            values_callable=enum_values,
+        )
+    )
+    command_status: Mapped[str] = mapped_column(String(40), default="confirmed", nullable=False)
+    command_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    phase: Mapped[str | None] = mapped_column(String(80))
+    phase_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    phase_duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    next_phase: Mapped[str | None] = mapped_column(String(80))
+    reason: Mapped[str | None] = mapped_column(String(255))
+    message: Mapped[str | None] = mapped_column(String(500))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+    )
+
+
 class Violation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "violations"
     __table_args__ = (

@@ -310,6 +310,75 @@ def test_no_blocking_sleep_in_mqtt_callback_path() -> None:
     asyncio.run(run())
 
 
+def test_executed_ack_includes_full_physical_state() -> None:
+    async def run() -> None:
+        harness = _harness()
+
+        await harness["handler"].handle_message(
+            "ignored",
+            _command(harness["settings"], "north", SignalColor.GREEN).model_dump_json().encode(),
+        )
+        await _wait_for_status(harness["mqtt"], CommandAckStatus.EXECUTED)
+
+        executed = _payloads(harness["mqtt"])[1]
+        assert executed["status"] == CommandAckStatus.EXECUTED.value
+        assert executed["requested_signal"] == SignalColor.GREEN.value
+        assert executed["source"] == "gpio"
+        assert executed["resulting_signals"] == {
+            "north": "green",
+            "south": "red",
+            "east": "red",
+            "west": "red",
+        }
+        await harness["executor"].shutdown_safe_state()
+
+    asyncio.run(run())
+
+
+def test_timed_restoration_publishes_all_red_state() -> None:
+    async def run() -> None:
+        sleep = ImmediateSleep()
+        harness = _harness(sleep=sleep)
+
+        await harness["handler"].handle_message(
+            "ignored",
+            _command(harness["settings"], "east", SignalColor.GREEN).model_dump_json().encode(),
+        )
+        await _wait_for_status_count(harness["mqtt"], CommandAckStatus.EXECUTED, 2)
+
+        restored = _payloads(harness["mqtt"])[2]
+        assert restored["source"] == "timed_restoration"
+        assert restored["resulting_signals"] == {
+            "north": "red",
+            "south": "red",
+            "east": "red",
+            "west": "red",
+        }
+        await harness["executor"].shutdown_safe_state()
+
+    asyncio.run(run())
+
+
+def test_startup_state_report_publishes_all_red_state() -> None:
+    async def run() -> None:
+        harness = _harness()
+
+        await harness["executor"].publish_current_state(source="startup")
+
+        report = _payloads(harness["mqtt"])[0]
+        assert report["command_id"] == "00000000-0000-0000-0000-000000000000"
+        assert report["source"] == "startup"
+        assert report["resulting_signals"] == {
+            "north": "red",
+            "south": "red",
+            "east": "red",
+            "west": "red",
+        }
+        await harness["executor"].shutdown_safe_state()
+
+    asyncio.run(run())
+
+
 def _harness(
     *,
     settings_overrides: dict[str, object] | None = None,
@@ -325,6 +394,7 @@ def _harness(
         controller=controller,
         sleep=sleep or BlockingSleep(),
     )
+    executor.startup_safe_state()
     handler = CommandHandler(settings, mqtt, executor)
     return {
         "settings": settings,
@@ -402,6 +472,10 @@ def _statuses(mqtt: FakeMQTTClient) -> list[CommandAckStatus]:
         CommandAckStatus(json.loads(payload)["status"])
         for _topic, payload in mqtt.published
     ]
+
+
+def _payloads(mqtt: FakeMQTTClient) -> list[dict[str, object]]:
+    return [json.loads(payload) for _topic, payload in mqtt.published]
 
 
 def _assert_statuses(mqtt: FakeMQTTClient, statuses: list[CommandAckStatus]) -> None:

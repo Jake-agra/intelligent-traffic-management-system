@@ -19,6 +19,13 @@ through validation and GPIO execution.
 Phase 11.1 adds a backend developer hardware test that sends one typed command
 through the real MQTT path and waits for Raspberry Pi acknowledgements.
 
+Phase 13.2 adds a fixed-time automatic controller with explicit `automatic`,
+`manual` and `failsafe` modes. When `AUTO_CONTROLLER_ENABLED=true`, the edge
+service starts from all red, publishes confirmed startup state, publishes
+controller mode/phase status, then runs the repeating all-red, north/south,
+all-red, east/west cycle. Mode commands are received through MQTT; manual signal
+commands are rejected until manual mode is confirmed.
+
 ## Setup
 
 ```powershell
@@ -49,6 +56,13 @@ TRAFFIC_LIGHT_EAST_LANE_ID="backend-east-lane-uuid"
 TRAFFIC_LIGHT_WEST_LANE_ID="backend-west-lane-uuid"
 SIGNAL_COMMAND_MAX_DURATION_SECONDS="60"
 SIGNAL_ALL_RED_TRANSITION_SECONDS="0.2"
+AUTO_CONTROLLER_ENABLED="true"
+AUTO_NS_GREEN_SECONDS="15"
+AUTO_NS_YELLOW_SECONDS="3"
+AUTO_EW_GREEN_SECONDS="15"
+AUTO_EW_YELLOW_SECONDS="3"
+AUTO_ALL_RED_SECONDS="2"
+MANUAL_OVERRIDE_MAX_SECONDS="60"
 ```
 
 GPIO is disabled by default in `.env.example`. Copy it to `.env`, then set
@@ -88,6 +102,8 @@ python -m app.intersection_test --sequence
 - Publishes device telemetry to `itms/v1/devices/{device_id}/telemetry`
 - Subscribes to `itms/v1/intersections/{intersection_id}/commands/signal`
 - Publishes acknowledgements to `itms/v1/intersections/{intersection_id}/commands/ack`
+- Subscribes to `itms/v1/intersections/{intersection_id}/commands/controller-mode`
+- Publishes controller status to `itms/v1/intersections/{intersection_id}/controller/status`
 
 ## Signal Command Execution
 
@@ -101,7 +117,14 @@ The service rejects wrong-intersection, stale, malformed, excessive-duration and
 unknown-lane commands. Duplicate command IDs are acknowledged as `duplicate`
 without re-executing GPIO. GPIO exceptions publish a `failed` acknowledgement.
 
-Startup sets the intersection to all red. Shutdown sets all GPIO outputs off.
+Startup sets the intersection to all red and publishes a confirmed all-red
+state report after MQTT connection. MQTT reconnect publishes the current
+physical state again. Shutdown sets all GPIO outputs off; this is a safe
+hardware cleanup state and is not reported as a red or green right-of-way.
+
+In automatic mode, local GPIO cycling continues if MQTT temporarily disconnects.
+On reconnect, the service republishes both current GPIO state and controller
+mode/phase so the backend and Digital Twin can reconcile confirmed state.
 
 ## Broker-To-Hardware Integration Test
 
@@ -129,8 +152,11 @@ cd backend
 .venv/bin/python -m app.tools.hardware_signal_test --direction north --signal green --duration 5
 ```
 
-The expected flow is `accepted` then `executed` for the same command ID. The Pi
-holds the requested state for the configured duration, then returns to all red.
+The expected flow is `accepted` then `executed` for the same command ID. The
+`executed` acknowledgement includes the full north/south/east/west physical
+state. The Pi holds the requested state for the configured duration, then
+returns to all red and publishes a second `executed` report with
+`source=timed_restoration`.
 
 Emergency all-red command:
 

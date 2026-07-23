@@ -12,6 +12,7 @@ The backend is the authoritative source for both the web dashboard and mobile ap
 - `alert.created`
 - `alert.acknowledged`
 - `device.status_changed`
+- `controller.mode_updated`
 
 ## Event envelope
 
@@ -88,5 +89,43 @@ telemetry emits `traffic.updated` after the reading is validated and stored.
 Signal command acknowledgements emit `signal.updated` after the acknowledgement
 payload is validated. MQTT handlers must use the shared realtime publisher rather
 than broadcasting directly.
+
+For physical signal synchronization, `signal.updated` distinguishes command
+status from confirmed state:
+
+- `status=requested` or `accepted`: command is pending; clients must not change
+  authoritative signal colours yet.
+- `status=executed` with `resulting_signals`: backend has persisted confirmed
+  physical state and clients should refresh or apply the confirmed state.
+- `status=rejected`, `failed` or `duplicate`: confirmed signal state is
+  unchanged.
+
+The event data may include `command_id`, `lane_id`, `requested_signal`,
+`resulting_signals`, `device_id`, `source`, `confirmed`, `state_changed` and
+`acknowledged_at`. Browsers consume this through the shared WebSocket provider;
+they never subscribe to MQTT directly.
+
+## Controller Mode Events
+
+Phase 13.2 adds `controller.mode_updated` for confirmed or pending physical
+controller mode and automatic phase state. Event data may include:
+
+- `command_id`
+- `status`
+- `mode`
+- `phase`
+- `phase_started_at`
+- `phase_duration_seconds`
+- `next_phase`
+- `device_id`
+- `source`
+- `confirmed`
+- `state_changed`
+- `acknowledged_at`
+
+Clients treat `status=requested` or `accepted` as pending. They display manual
+controls only after `mode=manual` is confirmed through the live API or a
+confirmed realtime update. Automatic phase displays remain confirmed physical
+state; the browser does not predict the next phase.
 
 This contract prevents the web dashboard and mobile app from displaying conflicting traffic, signal, alert, incident or device information.

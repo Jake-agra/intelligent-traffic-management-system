@@ -1,4 +1,5 @@
 import type { DeviceStatus, TrafficDensity } from "../../../api/types";
+import type { ControllerState } from "../../../api/types";
 
 export const DIRECTIONS = ["north", "south", "east", "west"] as const;
 
@@ -30,5 +31,6 @@ export interface DigitalTwinViewModel {
   isStale: boolean;
   directions: Record<Direction, DirectionTwinState>;
   deviceStatusSummary: Record<DeviceStatus, number>;
+  controllerState: ControllerState | null;
   staleReason: string | null;
 }

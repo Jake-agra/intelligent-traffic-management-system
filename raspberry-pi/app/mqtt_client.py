@@ -9,6 +9,7 @@ from app.config import Settings
 
 
 MessageHandler = Callable[[str, bytes], Awaitable[None]]
+ConnectHandler = Callable[[], Awaitable[None]]
 
 
 class MQTTClientProtocol(Protocol):
@@ -27,6 +28,9 @@ class MQTTClientProtocol(Protocol):
     def set_message_handler(self, handler: MessageHandler) -> None:
         ...
 
+    def set_connect_handler(self, handler: ConnectHandler) -> None:
+        ...
+
 
 class FakeMQTTClient:
     def __init__(self) -> None:
@@ -34,6 +38,7 @@ class FakeMQTTClient:
         self.subscriptions: list[str] = []
         self.published: list[tuple[str, str]] = []
         self.handler: MessageHandler | None = None
+        self.connect_handler: ConnectHandler | None = None
 
     async def connect(self) -> None:
         self.connected = True
@@ -50,6 +55,9 @@ class FakeMQTTClient:
     def set_message_handler(self, handler: MessageHandler) -> None:
         self.handler = handler
 
+    def set_connect_handler(self, handler: ConnectHandler) -> None:
+        self.connect_handler = handler
+
 
 class PahoMQTTClient:
     def __init__(self, settings: Settings) -> None:
@@ -61,8 +69,10 @@ class PahoMQTTClient:
         self._mqtt = mqtt
         self._settings = settings
         self._handler: MessageHandler | None = None
+        self._connect_handler: ConnectHandler | None = None
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._connected: asyncio.Future[None] | None = None
+        self._has_connected_once = False
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=settings.mqtt_client_id,
@@ -100,6 +110,9 @@ class PahoMQTTClient:
     def set_message_handler(self, handler: MessageHandler) -> None:
         self._handler = handler
 
+    def set_connect_handler(self, handler: ConnectHandler) -> None:
+        self._connect_handler = handler
+
     def _on_connect(
         self,
         _client: object,
@@ -115,10 +128,15 @@ class PahoMQTTClient:
         except (TypeError, ValueError):
             connected = str(reason_code).lower() == "success"
         if connected:
-            self._event_loop.call_soon_threadsafe(self._connected.set_result, None)
+            if self._connected is not None and not self._connected.done():
+                self._event_loop.call_soon_threadsafe(self._connected.set_result, None)
+            elif self._has_connected_once and self._connect_handler is not None:
+                asyncio.run_coroutine_threadsafe(self._connect_handler(), self._event_loop)
+            self._has_connected_once = True
         else:
             error = RuntimeError(f"MQTT connection failed with code {reason_code}.")
-            self._event_loop.call_soon_threadsafe(self._connected.set_exception, error)
+            if self._connected is not None and not self._connected.done():
+                self._event_loop.call_soon_threadsafe(self._connected.set_exception, error)
 
     def _on_message(self, _client: object, _userdata: object, message: object) -> None:
         if self._handler is None or self._event_loop is None:

@@ -41,6 +41,8 @@ class SignalModeResponse(OperationalActionResponse):
     intersection_id: uuid.UUID
     mode: OperatingMode
     reason: str
+    status: str = "confirmed"
+    command_id: uuid.UUID | None = None
 
 
 class SignalOverrideResponse(OperationalActionResponse):
@@ -50,4 +52,5 @@ class SignalOverrideResponse(OperationalActionResponse):
     duration_seconds: int
     started_at: datetime
     ends_at: datetime
-    signal_event_id: uuid.UUID
+    signal_event_id: uuid.UUID | None = None
+    command_id: uuid.UUID | None = None

@@ -191,6 +191,7 @@ function liveState({
     recent_violations: [],
     active_alerts: [],
     devices: [],
+    controller_state: null,
     generated_at: "2026-07-22T00:00:00Z"
   };
 }

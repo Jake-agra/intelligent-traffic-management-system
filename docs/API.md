@@ -58,10 +58,18 @@ publisher.
 | `POST /api/v1/intersections/{intersection_id}/signal-mode` | `admin` |
 | `POST /api/v1/intersections/{intersection_id}/signal-override` | `admin` |
 
-Signal operations do not control GPIO in this phase. They update backend state,
-create `SignalEvent` history and publish `signal.updated`.
+When MQTT hardware execution is disabled, signal operations update backend
+state, create `SignalEvent` history and publish `signal.updated`. When MQTT
+hardware execution is enabled, signal overrides and mode changes are requested
+commands. Confirmed physical `SignalState` and controller mode are recorded only
+after the Raspberry Pi publishes executed acknowledgements or controller status
+reports.
 
 The live intersection response preserves append-only signal history in the
 database, but returns one latest authoritative `current_signal_states` entry per
 lane for the current UI state. Timestamp ordering is used first; matching
 timestamps are resolved deterministically by signal-state UUID.
+
+Phase 13.2 adds `controller_state` to the live response with confirmed
+`automatic`, `manual` or `failsafe` mode, current phase, phase timing metadata,
+pending requested mode and controller command status where available.

@@ -258,6 +258,53 @@ describe("dashboard app", () => {
     expect(confirm).toHaveBeenCalled();
   });
 
+  it("hides manual override controls during confirmed automatic mode", async () => {
+    authenticated();
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: jsonResponse(
+        liveState("green", { mode: "automatic", phase: "north_south_green" })
+      )
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}`);
+    render(<App />);
+
+    const controls = await screen.findByLabelText(/signal controls/i);
+
+    expect(controls).toHaveTextContent("Controller mode: automatic");
+    expect(controls).toHaveTextContent("Phase: north_south_green");
+    expect(within(controls).queryByRole("button", { name: /send override/i })).not.toBeInTheDocument();
+    expect(controls).toHaveTextContent(/available after manual mode is confirmed/i);
+  });
+
+  it("requires confirmation before switching automatic to manual", async () => {
+    authenticated();
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: jsonResponse(
+        liveState("green", { mode: "automatic", phase: "north_south_green" })
+      )
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}`);
+    render(<App />);
+
+    const controls = await screen.findByLabelText(/signal controls/i);
+    await userEvent.click(within(controls).getByRole("button", { name: /switch to manual/i }));
+
+    expect(confirm).toHaveBeenCalled();
+  });
+
+  it("shows emergency all red action to admins", async () => {
+    authenticated();
+    mockFetch();
+    window.history.pushState({}, "", `/intersections/${intersectionId}`);
+    render(<App />);
+
+    const controls = await screen.findByLabelText(/signal controls/i);
+
+    expect(within(controls).getByRole("button", { name: /emergency all red/i })).toBeInTheDocument();
+  });
+
   it("submits a successful signal-control request", async () => {
     authenticated();
     mockFetch();
@@ -399,7 +446,10 @@ function intersection() {
   };
 }
 
-function liveState(color: string) {
+function liveState(
+  color: string,
+  controllerState: { mode: "automatic" | "manual" | "failsafe"; phase: string | null } | null = null
+) {
   return {
     intersection: intersection(),
     lanes: [
@@ -430,6 +480,27 @@ function liveState(color: string) {
     recent_violations: [],
     active_alerts: [],
     devices: [],
+    controller_state: controllerState
+      ? {
+          id: "controller-state-1",
+          intersection_id: intersectionId,
+          device_id: null,
+          mode: controllerState.mode,
+          requested_mode: null,
+          command_status: "confirmed",
+          command_id: null,
+          phase: controllerState.phase,
+          phase_started_at: controllerState.phase ? "2026-07-22T00:00:00Z" : null,
+          phase_duration_seconds: controllerState.phase ? 15 : null,
+          next_phase: controllerState.phase ? "north_south_yellow" : null,
+          reason: null,
+          message: null,
+          confirmed_at: "2026-07-22T00:00:00Z",
+          updated_by_id: null,
+          created_at: "2026-07-22T00:00:00Z",
+          updated_at: "2026-07-22T00:00:00Z"
+        }
+      : null,
     generated_at: "2026-07-22T00:00:00Z"
   };
 }

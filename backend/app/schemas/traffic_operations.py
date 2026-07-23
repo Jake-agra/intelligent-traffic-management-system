@@ -74,6 +74,26 @@ class SignalStateResponse(ORMModel):
     ends_at: datetime | None
 
 
+class ControllerStateResponse(ORMModel):
+    id: uuid.UUID
+    intersection_id: uuid.UUID
+    device_id: uuid.UUID | None
+    mode: OperatingMode
+    requested_mode: OperatingMode | None
+    command_status: str
+    command_id: uuid.UUID | None
+    phase: str | None
+    phase_started_at: datetime | None
+    phase_duration_seconds: int | None
+    next_phase: str | None
+    reason: str | None
+    message: str | None
+    confirmed_at: datetime | None
+    updated_by_id: uuid.UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class IncidentResponse(ORMModel):
     id: uuid.UUID
     intersection_id: uuid.UUID
@@ -130,6 +150,7 @@ class IntersectionLiveResponse(APIModel):
     recent_violations: list[ViolationResponse]
     active_alerts: list[AlertResponse]
     devices: list[DeviceHealthResponse]
+    controller_state: ControllerStateResponse | None = None
     generated_at: datetime
 
 

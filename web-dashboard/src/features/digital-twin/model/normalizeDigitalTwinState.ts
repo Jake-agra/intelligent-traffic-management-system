@@ -42,6 +42,7 @@ export function normalizeDigitalTwinState({
       isStale: true,
       directions,
       deviceStatusSummary: { online: 0, offline: 0, degraded: 0 },
+      controllerState: null,
       staleReason: "No live intersection state has been loaded."
     };
   }
@@ -103,6 +104,7 @@ export function normalizeDigitalTwinState({
     isStale,
     directions,
     deviceStatusSummary: summarizeDevices(liveState.devices),
+    controllerState: liveState.controller_state,
     staleReason: staleReason({ lastUpdateAt, ageMs, websocketStatus })
   };
 }
@@ -138,6 +140,7 @@ export function isDigitalTwinRealtimeEvent(event: RealtimeEventEnvelope): boolea
     event.event === "signal.updated" ||
     event.event === "traffic.updated" ||
     event.event === "device.status_changed" ||
+    event.event === "controller.mode_updated" ||
     event.event === "incident.updated" ||
     event.event === "incident.created"
   );

@@ -9,6 +9,7 @@ from app.models.enums import AlertStatus, DeviceStatus, IncidentStatus
 from app.models.mixins import utc_now
 from app.models.traffic import (
     Alert,
+    ControllerState,
     Device,
     Incident,
     Intersection,
@@ -84,6 +85,7 @@ def get_intersection_live_state(
             intersection_id=intersection_id,
             limit=100,
         ),
+        controller_state=get_controller_state(db, intersection_id=intersection_id),
         generated_at=utc_now(),
     )
 
@@ -187,6 +189,16 @@ def list_device_health(
             .order_by(Device.name)
             .limit(limit)
         )
+    )
+
+
+def get_controller_state(
+    db: Session,
+    *,
+    intersection_id: uuid.UUID,
+) -> ControllerState | None:
+    return db.scalar(
+        select(ControllerState).where(ControllerState.intersection_id == intersection_id)
     )
 
 

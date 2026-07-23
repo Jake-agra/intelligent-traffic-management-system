@@ -2,6 +2,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../../App";
+import type { IntersectionLiveState } from "../../../api/types";
 
 const user = {
   id: "user-1",
@@ -239,6 +240,42 @@ describe("digital twin page", () => {
     await waitFor(() => expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("green"));
   });
 
+  it("does not change authoritative signal display on accepted-only status", async () => {
+    authenticated();
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: () =>
+        jsonResponse(liveState({ northSignal: "red" }))
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}/digital-twin`);
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("red"));
+    act(() => {
+      MockWebSocket.instances[0].emit(signalStatusEvent("accepted", "signal-accepted-1"));
+    });
+
+    expect(await screen.findByText(/waiting for physical execution/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("red");
+  });
+
+  it("shows failed physical command status without changing confirmed signal", async () => {
+    authenticated();
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: () =>
+        jsonResponse(liveState({ northSignal: "red" }))
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}/digital-twin`);
+    render(<App />);
+
+    await screen.findByTestId("digital-twin-scene-canvas");
+    act(() => {
+      MockWebSocket.instances[0].emit(signalStatusEvent("failed", "signal-failed-1"));
+    });
+
+    expect(await screen.findByText(/confirmed signal state was not changed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("red");
+  });
+
   it("refreshes traffic density after a WebSocket traffic update", async () => {
     authenticated();
     let vehicles = 2;
@@ -274,6 +311,46 @@ describe("digital twin page", () => {
     expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("medium");
     expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("Vehicles7");
     expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("Visible vehicles7");
+  });
+
+  it("displays physical controller offline state safely", async () => {
+    authenticated();
+    const state = liveState();
+    state.devices = [
+      {
+        id: "device-1",
+        intersection_id: intersectionId,
+        lane_id: null,
+        identifier: "rpi-1",
+        name: "Raspberry Pi",
+        type: "raspberry_pi",
+        status: "offline",
+        last_seen_at: null
+      }
+    ];
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: jsonResponse(state)
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}/digital-twin`);
+
+    render(<App />);
+
+    expect(await screen.findByText(/physical controller offline or stale/i)).toBeInTheDocument();
+  });
+
+  it("displays confirmed automatic controller phase", async () => {
+    authenticated();
+    const state = liveState();
+    state.controller_state = controllerState("automatic", "north_south_green");
+    mockFetch({
+      [`GET /api/v1/intersections/${intersectionId}/live`]: jsonResponse(state)
+    });
+    window.history.pushState({}, "", `/intersections/${intersectionId}/digital-twin`);
+
+    render(<App />);
+
+    expect(await screen.findByText("north_south_green")).toBeInTheDocument();
+    expect(screen.getByLabelText(/digital twin textual state/i)).toHaveTextContent("Modeautomatic");
   });
 
   it("keeps textual fallback when WebGL initialization fails", async () => {
@@ -411,7 +488,7 @@ function liveState({
   northSignal?: "red" | "green";
   northVehicles?: number;
   northDensity?: "low" | "medium" | "high";
-} = {}) {
+} = {}): IntersectionLiveState {
   return {
     intersection: {
       id: intersectionId,
@@ -445,6 +522,7 @@ function liveState({
     recent_violations: [],
     active_alerts: [],
     devices: [],
+    controller_state: null,
     generated_at: "2026-07-22T00:00:00Z"
   };
 }
@@ -467,7 +545,7 @@ function signal(
   color: string,
   startedAt = "2026-07-22T00:00:00Z",
   id = `signal-${laneId}`
-) {
+): any {
   return {
     id,
     intersection_id: intersectionId,
@@ -491,6 +569,28 @@ function traffic(laneId: string, vehicleCount: number, density: "low" | "medium"
   };
 }
 
+function controllerState(mode: "automatic" | "manual" | "failsafe", phase: string | null) {
+  return {
+    id: "controller-state-1",
+    intersection_id: intersectionId,
+    device_id: null,
+    mode,
+    requested_mode: null,
+    command_status: "confirmed",
+    command_id: null,
+    phase,
+    phase_started_at: phase ? "2026-07-22T00:00:00Z" : null,
+    phase_duration_seconds: phase ? 15 : null,
+    next_phase: phase ? "north_south_yellow" : null,
+    reason: null,
+    message: null,
+    confirmed_at: "2026-07-22T00:00:00Z",
+    updated_by_id: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z"
+  };
+}
+
 function realtimeEvent(event: "signal.updated" | "traffic.updated", eventId: string) {
   return {
     event,
@@ -499,6 +599,16 @@ function realtimeEvent(event: "signal.updated" | "traffic.updated", eventId: str
     occurred_at: "2026-07-22T00:00:00Z",
     intersection_id: intersectionId,
     data: {}
+  };
+}
+
+function signalStatusEvent(status: string, eventId: string) {
+  return {
+    ...realtimeEvent("signal.updated", eventId),
+    data: {
+      status,
+      command_id: "command-1"
+    }
   };
 }
 

@@ -57,6 +57,7 @@ node_modules/
 .next/
 .nuxt/
 .vite/
+*.tsbuildinfo
 coverage/
 storybook-static/
 build/
@@ -75,6 +76,7 @@ ios/build/
 
 # Package manager outputs
 package-lock.json
+!web-dashboard/package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
